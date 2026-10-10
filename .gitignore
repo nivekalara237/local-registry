@@ -1,0 +1,9 @@
+.claude/
+dist/
+asset/
+.DS_Store
+*.env
+*.DS_Store
+.idea/
+config.yaml
+HISTORIES.md
