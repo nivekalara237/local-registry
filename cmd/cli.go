@@ -21,7 +21,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	localregistry "sonarbridge-go/local-registry"
+	localregistry "github.com/nivekalara237/local-registry"
 
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
@@ -77,7 +77,7 @@ func run(argv []string, stdout, stderr io.Writer, serve serveFunc) int {
 
 func versionString() string {
 	var s strings.Builder
-	s.WriteString(fmt.Sprintf("local-registry %s (%s, %s/%s", version, runtime.Version(), runtime.GOOS, runtime.GOARCH))
+	fmt.Fprintf(&s, "local-registry %s (%s, %s/%s", version, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, kv := range info.Settings {
 			if kv.Key == "vcs.revision" && len(kv.Value) >= 12 {

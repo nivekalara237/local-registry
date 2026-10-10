@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	localregistry "github.com/nivekalara237/local-registry"
 	"os"
-	localregistry "sonarbridge-go/local-registry"
 	"time"
 )
 
@@ -73,6 +73,8 @@ func newServer() (*localregistry.LocalRegistryServer, error) {
 	server.AddFileRoute("/assets/binary/{filePath}", "GET", "filePath")
 	server.AddFileRoute("/assets/checksum/{filename}", "GET", "filename")
 	server.AddReleaseRoutes(args.publicURL)
+	// Liveness probe (Docker HEALTHCHECK, load balancers): answers as soon as the server serves.
+	server.AddRoute("/healthz", "GET", func(...string) any { return map[string]string{"status": "ok"} })
 	server.AddRouteE("/{vcs}/artifacts", "GET", fnGetArtifacts)
 	server.AddRouteE("/{vcs}/artifacts/{version}", "GET", fnGetArtifacts)
 	server.AddRouteE("/artifacts/all", "GET", fnGetAllArtifacts)

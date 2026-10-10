@@ -1,0 +1,10 @@
+# golangci-lint v2, run by .github/workflows/ci.yml (stage 1).
+version: "2"
+
+run:
+  go: "1.27"
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  exclusions:
+    presets:
+      - std-error-handling # unchecked Close/Remove in defers and cleanups

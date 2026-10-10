@@ -208,7 +208,9 @@ func TestConfigCommand(t *testing.T) {
 	dir := t.TempDir()
 	cfg := filepath.Join(dir, "config.yaml")
 	writeFile(t, cfg, "asset-path: "+dir+"\nport: 7000\nupload-token: very-secret\n")
-	os.Chmod(cfg, 0o600)
+	if err := os.Chmod(cfg, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("LOCAL_REGISTRY_ADDRESS", "0.0.0.0")
 
 	r := runCLI(t, "config", "--config", cfg, "--max-upload-mb", "50")
@@ -418,7 +420,9 @@ func TestGenerateToken(t *testing.T) {
 		os.Unsetenv("LOCAL_REGISTRY_UPLOAD_TOKEN")
 		cfg := filepath.Join(dir, "tok.yaml")
 		writeFile(t, cfg, "asset-path: "+dir+"\nupload-token: from-file\n")
-		os.Chmod(cfg, 0o600)
+		if err := os.Chmod(cfg, 0o600); err != nil {
+			t.Fatal(err)
+		}
 		r = runCLI(t, "serve", "--config", cfg, "--disable-generate-token=false")
 		if r.served.uploadToken != "from-file" || !strings.Contains(r.stderr, "(config file)") {
 			t.Fatalf("config file token: %+v", r)
