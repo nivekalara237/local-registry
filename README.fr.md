@@ -1,6 +1,5 @@
 <p align="center">
-  <img alt="GoReleaser Logo" src="./assets/logo-fl.svg?v=3&s=200" height="200" />
-  <h3 align="center">Local-Registry</h3>
+  <img alt="GoReleaser Logo" src="./assets/logo-fl.svg?v=3&s=300" height="300" />
   <p align="center" style="color: #43f9f9">
     <img height="30" src="https://cdn.simpleicons.org/go/555555/ffffff" alt="Go" />
   </p>

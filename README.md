@@ -1,5 +1,8 @@
 <p align="center">
-  <img alt="GoReleaser Logo" src="[./assets/logo-fl.svg](https://raw.githubusercontent.com/nivekalara237/local-registry/ba87dd439dabe95f0e04d9956a3d74f9d33daabb/assets/logo-fl.svg?v=3&s=200" height="200" />
+  <img alt="GoReleaser Logo" src="./assets/logo-fl.svg?v=3&s=300" height="300" />
+  <p align="center" style="color: #43f9f9">
+    <img height="30" src="https://cdn.simpleicons.org/go/555555/ffffff" alt="Go" />
+  </p>
 </p>
 
 ---
