@@ -23,7 +23,6 @@ func TestLayoutPaths(t *testing.T) {
 		{"latest", func() (string, error) { return l.ArtifactsFile("gitlab", "latest") }, bins + "/gitlab/artifacts.json"},
 		{"no version", func() (string, error) { return l.ArtifactsFile("gitlab", "") }, bins + "/gitlab/artifacts.json"},
 		{"versioned", func() (string, error) { return l.ArtifactsFile("gitlab", "v0.1.0") }, bins + "/gitlab/v0.1.0/artifacts.json"},
-		{"legacy release", func() (string, error) { return l.LegacyReleaseDir("v0.1.0") }, filepath.FromSlash("/srv/assets/binaries/gitlab/v0.1.0")},
 	}
 	for _, tt := range tests {
 		got, err := tt.got()
@@ -43,9 +42,6 @@ func TestLayoutRejectsUnsafeNames(t *testing.T) {
 			if _, err := l.ArtifactsFile("gitlab", bad); !errors.Is(err, ErrNotFound) {
 				t.Fatalf("ArtifactsFile(gitlab, %q) err = %v", bad, err)
 			}
-		}
-		if _, err := l.LegacyReleaseDir(bad); !errors.Is(err, ErrNotFound) {
-			t.Fatalf("LegacyReleaseDir(%q) err = %v", bad, err)
 		}
 	}
 }

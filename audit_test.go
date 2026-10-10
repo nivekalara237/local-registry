@@ -63,7 +63,7 @@ func TestAuditTrail(t *testing.T) {
 	putAll(t, h, "v0.1.0", release())
 	do(t, h, call{method: "PUT", target: "/gitlab/artifacts/v0.1.0/files/stray.bin", body: "x", token: testToken})
 	rec, _ := do(t, h, call{method: "POST", target: "/gitlab/artifacts/v0.1.0/publish", token: testToken})
-	if rec.Code != http.StatusUnprocessableEntity { // stray.bin is not in the checksums
+	if rec.Code != http.StatusUnprocessableEntity { // stray.bin is neither in the checksums nor in artifacts.json
 		t.Fatalf("publish with stray file: %d", rec.Code)
 	}
 	staging, _ := NewLayout(root).StagingDir("gitlab", "v0.1.0")
@@ -102,13 +102,14 @@ func TestAuditTrail(t *testing.T) {
 		t.Fatalf("publish = %v", pub)
 	}
 	files := pub[0]["files"].([]any)
-	if len(files) != len(release()) {
+	if len(files) != len(release())+1 { // + artifacts.goreleaser.json
 		t.Fatalf("publish files = %v", files)
 	}
+	final, _ := NewLayout(root).VersionDir("gitlab", "v0.1.0")
 	for _, f := range files {
 		rec := f.(map[string]any)
-		content := release()[rec["name"].(string)]
-		if rec["sha256"] != sha(content) || rec["size"] != float64(len(content)) {
+		content, err := os.ReadFile(filepath.Join(final, rec["name"].(string)))
+		if err != nil || rec["sha256"] != sha(string(content)) || rec["size"] != float64(len(content)) {
 			t.Errorf("publish record %v does not match the file", rec)
 		}
 	}

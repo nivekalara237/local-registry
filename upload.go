@@ -44,6 +44,10 @@ type UploadConfig struct {
 	// StagingTTL is how long a staged version may sit untouched before it is purged.
 	// The purge runs while ServeContext serves. It should exceed the 30 min upload timeout.
 	StagingTTL time.Duration
+	// PublicURL is the server's address as clients reach it, such as https://registry.example.com
+	// behind a reverse proxy. Publishing writes it before each download path in artifacts.json;
+	// empty, the paths stay relative (/{vcs}/artifacts/{version}/files/{name}).
+	PublicURL string
 }
 
 // withDefaults replaces zero limits by their defaults.
@@ -69,12 +73,16 @@ func (cfg UploadConfig) withDefaults() UploadConfig {
 	return cfg
 }
 
-// AddUploadRoutes registers the two-step upload of a release:
+// AddUploadRoutes registers the two-step upload of a release, and the download of its files:
 //
 //	PUT  /{vcs}/artifacts/{version}/files/{name}   stream one file into staging
 //	POST /{vcs}/artifacts/{version}/publish        check the staged files and publish them at once
+//	GET  /{vcs}/artifacts/{version}/files/{name}   download a file of a published version
 //
-// A published version is immutable: both routes answer 409 once it exists.
+// artifacts.json must be uploaded last: it is refused while a file it lists is missing.
+// Publishing rewrites it so that each "path" is the file's GET URL, and keeps the uploaded
+// one as artifacts.goreleaser.json.
+// A published version is immutable: PUT and POST answer 409 once it exists.
 // Every accepted or refused request is recorded in the audit log (see SetAuditLog).
 func (s *LocalRegistryServer) AddUploadRoutes(cfg UploadConfig) {
 	cfg = cfg.withDefaults()
@@ -97,11 +105,6 @@ func (s *LocalRegistryServer) AddUploadRoutes(cfg UploadConfig) {
 	}
 
 	s.serverMux.HandleFunc("PUT /{vcs}/artifacts/{version}/files/{name}", func(w http.ResponseWriter, r *http.Request) {
-
-		fmt.Println("**************************************")
-		fmt.Println(r.Header)
-		fmt.Println("**************************************")
-
 		if err := authorize(cfg, r); err != nil {
 			s.auditAuthFailure(r, err)
 			writeAuthError(w, r, err)
@@ -124,7 +127,7 @@ func (s *LocalRegistryServer) AddUploadRoutes(cfg UploadConfig) {
 			writeAuthError(w, r, err)
 			return
 		}
-		res, err := s.publish(w, r)
+		res, err := s.publish(cfg, w, r)
 		if err != nil {
 			refused(w, r, "publish_refused", err)
 			return
@@ -134,6 +137,7 @@ func (s *LocalRegistryServer) AddUploadRoutes(cfg UploadConfig) {
 		})
 		writeJSON(w, http.StatusOK, res)
 	})
+	s.serverMux.HandleFunc("GET /{vcs}/artifacts/{version}/files/{name}", s.serveReleaseFile)
 }
 
 // auditAuthFailure records a refused authentication; the token sent is never recorded.
@@ -217,6 +221,9 @@ func (s *LocalRegistryServer) putFile(cfg UploadConfig, w http.ResponseWriter, r
 	if !ValidName(name) {
 		return nil, httpError(http.StatusBadRequest, "invalid file name: use [A-Za-z0-9._-] only")
 	}
+	if name == originalArtifactsFile {
+		return nil, httpError(http.StatusBadRequest, "%s is reserved: publishing writes it", name)
+	}
 	if published, err := exists(final); err != nil || published {
 		if err != nil {
 			return nil, err
@@ -285,6 +292,15 @@ func (s *LocalRegistryServer) putFile(cfg UploadConfig, w http.ResponseWriter, r
 	if size > b.limit {
 		return nil, b.tooLarge
 	}
+	if name == artifactsFile {
+		if err := checkUploadedArtifacts(tmp.Name(), staging, size); err != nil {
+			return nil, err
+		}
+		// Left by a publish that failed after its rewrite: it would shadow this upload.
+		if err := os.Remove(filepath.Join(staging, originalArtifactsFile)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+	}
 	dst := filepath.Join(staging, name)
 	replaced, err := exists(dst)
 	if err != nil {
@@ -315,7 +331,21 @@ type fileRecord struct {
 	Sha256 string `json:"sha256"`
 }
 
-func (s *LocalRegistryServer) publish(w http.ResponseWriter, r *http.Request) (*publishResult, error) {
+// checkUploadedArtifacts checks an artifacts.json being uploaded to staging: every file it
+// publishes must already be there, with its sha256.
+func checkUploadedArtifacts(file, staging string, size int64) error {
+	if size > maxArtifactsSize {
+		return unprocessable("artifacts.json is larger than %d MiB", maxArtifactsSize>>20)
+	}
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return err
+	}
+	_, err = checkArtifacts(staging, data, nil)
+	return err
+}
+
+func (s *LocalRegistryServer) publish(cfg UploadConfig, w http.ResponseWriter, r *http.Request) (*publishResult, error) {
 	vcs, version, final, staging, err := s.target(r)
 	if err != nil {
 		return nil, err
@@ -354,6 +384,9 @@ func (s *LocalRegistryServer) publish(w http.ResponseWriter, r *http.Request) (*
 	if err != nil {
 		return nil, err
 	}
+	if files, err = rewriteStagedArtifacts(cfg, staging, vcs, version, files, sums); err != nil {
+		return nil, err
+	}
 	records := make([]fileRecord, 0, len(files))
 	for _, f := range files {
 		info, err := os.Stat(filepath.Join(staging, f))
@@ -380,7 +413,7 @@ func (s *LocalRegistryServer) publish(w http.ResponseWriter, r *http.Request) (*
 
 // unchecked files carry no line in the checksums file: the metadata and signatures of the checksums.
 func unchecked(name string) bool {
-	return name == "artifacts.json" || name == "metadata.json" ||
+	return name == artifactsFile || name == originalArtifactsFile || name == "metadata.json" ||
 		strings.HasSuffix(name, ".sig") || strings.HasSuffix(name, ".pem")
 }
 
@@ -496,12 +529,76 @@ func fileSha256(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
+// rewriteStagedArtifacts checks the staged artifacts.json against the staged files, then
+// replaces it by its rewritten form and keeps the uploaded one as artifacts.goreleaser.json.
+// It returns the staged file names and updates sums to match.
+func rewriteStagedArtifacts(cfg UploadConfig, staging, vcs, version string, files []string, sums map[string]string) ([]string, error) {
+	// An artifacts.goreleaser.json in staging was left by a publish that failed after its
+	// rewrite (uploading artifacts.json removes it): it is the uploaded artifacts.json.
+	original := filepath.Join(staging, originalArtifactsFile)
+	source := filepath.Join(staging, artifactsFile)
+	hadOriginal := slices.Contains(files, originalArtifactsFile)
+	if hadOriginal {
+		source = original
+	}
+	if info, err := os.Stat(source); err != nil {
+		return nil, err
+	} else if info.Size() > maxArtifactsSize {
+		return nil, unprocessable("artifacts.json is larger than %d MiB", maxArtifactsSize>>20)
+	}
+	data, err := os.ReadFile(source)
+	if err != nil {
+		return nil, err
+	}
+	published, err := checkArtifacts(staging, data, sums)
+	if err != nil {
+		return nil, err
+	}
+	listed := map[string]bool{artifactsFile: true, originalArtifactsFile: true, "metadata.json": true}
+	for _, a := range published {
+		listed[a.Name] = true
+	}
+	for _, f := range files {
+		if !listed[f] {
+			return nil, unprocessable("%s is uploaded but artifacts.json does not list it", f)
+		}
+	}
+
+	rewritten, err := rewriteArtifacts(published, releaseFilesURL(cfg.PublicURL, vcs, version))
+	if err != nil {
+		return nil, err
+	}
+	if !hadOriginal {
+		if err := writeAtomic(original, data); err != nil {
+			return nil, err
+		}
+		files = append(files, originalArtifactsFile)
+		slices.Sort(files)
+	}
+	if err := writeAtomic(filepath.Join(staging, artifactsFile), rewritten); err != nil {
+		return nil, err
+	}
+	sums[originalArtifactsFile] = hexSha256(data)
+	sums[artifactsFile] = hexSha256(rewritten)
+	return files, nil
+}
+
+func hexSha256(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
 // copyAtomic copies src over dst through a temp file and a rename, so readers never see half a file.
 func copyAtomic(src, dst string) error {
 	data, err := os.ReadFile(src)
 	if err != nil {
 		return err
 	}
+	return writeAtomic(dst, data)
+}
+
+// writeAtomic writes data to dst through a temp file and a rename, so readers never see half a file.
+func writeAtomic(dst string, data []byte) error {
 	tmp, err := os.CreateTemp(filepath.Dir(dst), ".tmp-*")
 	if err != nil {
 		return err
