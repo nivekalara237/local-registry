@@ -6,6 +6,9 @@
 </p>
 
 ---
+[![ci](https://github.com/nivekalara237/local-registry/actions/workflows/ci.yml/badge.svg)](https://github.com/nivekalara237/local-registry/actions/workflows/ci.yml)
+[![release](https://github.com/nivekalara237/local-registry/actions/workflows/release.yml/badge.svg)](https://github.com/nivekalara237/local-registry/actions/workflows/release.yml)
+---
 
 **English** | [Français](README.fr.md)
 
