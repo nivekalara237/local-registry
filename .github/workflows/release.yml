@@ -1,14 +1,3 @@
-# Release on a v* tag:
-#   1-3  ci.yml on the tagged commit
-#   4a   build every artifact and the image, scan and smoke-test the image (nothing published)
-#   ⏸    manual approval: environment "production" (Settings → Environments → required reviewers)
-#   4b+5 push the image to Docker Hub and ghcr.io and create the GitHub release (goreleaser)
-#
-# Settings:
-#   variable DOCKERHUB_USERNAME (repository or environment "production")
-#   secret   DOCKERHUB_TOKEN    (environment "production": only readable after approval)
-#   ghcr.io uses GITHUB_TOKEN; the package is created private on the first push
-#   (Packages → local-registry → Package settings → visibility).
 name: release
 
 on:
@@ -34,7 +23,7 @@ jobs:
       security-events: write
 
   build:
-    name: 4a. build and scan
+    name: build and scan
     needs: ci
     runs-on: ubuntu-latest
     permissions:
@@ -100,7 +89,7 @@ jobs:
           retention-days: 7
 
   publish:
-    name: 4b+5. docker push (Docker Hub, ghcr.io) and GitHub release
+    name: docker push (Docker Hub, ghcr.io) and GitHub release
     needs: build
     runs-on: ubuntu-latest
     environment:
