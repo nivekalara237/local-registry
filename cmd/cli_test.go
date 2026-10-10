@@ -162,6 +162,10 @@ func TestUsageErrors(t *testing.T) {
 		{"negative quota", nil, []string{"serve", "--asset-path", dir, "--max-version-mb", "-1"}, "cannot be negative"},
 		{"negative files", nil, []string{"serve", "--asset-path", dir, "--max-version-files", "-1"}, "cannot be negative"},
 		{"port range", nil, []string{"serve", "--asset-path", dir, "--port", "70000"}, "out of range"},
+		{"public url without scheme", nil, []string{"serve", "--asset-path", dir, "--public-url", "registry.example.com"}, "public-url"},
+		{"public url ftp", nil, []string{"serve", "--asset-path", dir, "--public-url", "ftp://registry.example.com"}, "public-url"},
+		{"public url with query", nil, []string{"serve", "--asset-path", dir, "--public-url", "https://r.example.com/?a=1"}, "public-url"},
+		{"public url with user", nil, []string{"serve", "--asset-path", dir, "--public-url", "https://u:p@r.example.com"}, "public-url"},
 		{"audit in public tree", nil, []string{"serve", "--asset-path", dir, "--audit-log", filepath.Join(dir, "bin.local/assets/a.log")}, "downloadable"},
 		{"bad flag value", nil, []string{"serve", "--asset-path", dir, "--port", "abc"}, "invalid argument"},
 		{"unknown flag", nil, []string{"serve", "--nope"}, "unknown flag"},
@@ -437,4 +441,22 @@ func TestGenerateToken(t *testing.T) {
 			t.Fatalf("%+v", r)
 		}
 	})
+}
+
+func TestPublicURL(t *testing.T) {
+	cleanEnv(t)
+	dir := t.TempDir()
+	r := runCLI(t, "serve", "--asset-path", dir)
+	if r.code != 0 || r.served.publicURL != "" {
+		t.Fatalf("default: code = %d, public-url = %q, stderr = %s", r.code, r.served.publicURL, r.stderr)
+	}
+	t.Setenv(envName("public-url"), "https://registry.example.com/sub/")
+	r = runCLI(t, "serve", "--asset-path", dir)
+	if r.code != 0 || r.served.publicURL != "https://registry.example.com/sub" {
+		t.Fatalf("env: code = %d, public-url = %q, stderr = %s", r.code, r.served.publicURL, r.stderr)
+	}
+	r = runCLI(t, "config", "--asset-path", dir)
+	if !strings.Contains(r.stdout, "public-url") || !strings.Contains(r.stdout, "https://registry.example.com/sub") {
+		t.Fatalf("config output = %s", r.stdout)
+	}
 }

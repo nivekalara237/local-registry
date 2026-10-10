@@ -118,22 +118,28 @@ func (s *LocalRegistryServer) AddFileRoute(uri, method, filename string) {
 			http.NotFound(writer, req)
 			return
 		}
-
-		r, err := os.OpenRoot(root)
-		if err != nil {
-			http.NotFound(writer, req)
-			return
-		}
-		defer r.Close()
-		fsys := r.FS()
-		info, err := fs.Stat(fsys, name)
-		if err != nil || !info.Mode().IsRegular() {
-			http.NotFound(writer, req)
-			return
-		}
-
-		writer.Header().Set("Content-Type", "application/octet-stream")
-		writer.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": path.Base(name)}))
-		http.ServeFileFS(writer, req, fsys, name)
+		serveFile(writer, req, root, name)
 	})
+}
+
+// serveFile sends name, a slash-separated path relative to root, as an attachment.
+// It is opened through an os.Root: a symbolic link cannot lead outside root.
+// A missing file, a directory or any other non-regular file answers 404.
+func serveFile(w http.ResponseWriter, req *http.Request, root, name string) {
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		http.NotFound(w, req)
+		return
+	}
+	defer r.Close()
+	fsys := r.FS()
+	info, err := fs.Stat(fsys, name)
+	if err != nil || !info.Mode().IsRegular() {
+		http.NotFound(w, req)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": path.Base(name)}))
+	http.ServeFileFS(w, req, fsys, name)
 }

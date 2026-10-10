@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img"
+     aria-labelledby="lr-title">
+    <title id="lr-title">local-registry</title>
+    <style>.fr{fill:#0E1B2C}.pk{fill:#060C16}@media (prefers-color-scheme:dark){.fr{fill:#1B2F4A}.pk{fill:#0F1C2E}}
+    </style>
+    <defs>
+        <linearGradient id="lr-teal-top" gradientUnits="userSpaceOnUse" x1="0" y1="-94" x2="0" y2="0">
+            <stop offset="0" stop-color="#7FEBD9"/>
+            <stop offset="1" stop-color="#36D2C0"/>
+        </linearGradient>
+        <linearGradient id="lr-teal-left" gradientUnits="userSpaceOnUse" x1="-81.41" y1="-47" x2="0" y2="94">
+            <stop offset="0" stop-color="#22C4B2"/>
+            <stop offset="1" stop-color="#129A9C"/>
+        </linearGradient>
+        <linearGradient id="lr-amber-front" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#FFB224"/>
+            <stop offset="1" stop-color="#F29A0E"/>
+        </linearGradient>
+        <linearGradient id="lr-amber-left" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#E9890B"/>
+            <stop offset="1" stop-color="#C96A06"/>
+        </linearGradient>
+        <linearGradient id="lr-amber-top" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#FFD773"/>
+            <stop offset="1" stop-color="#FFBD3A"/>
+        </linearGradient>
+    </defs>
+    <g transform="translate(128 128)">
+        <path fill="url(#lr-teal-top)"
+              d="M2.82 -89.66A5.64 5.64 0 0 0 -2.82 -89.66L-68.25 -51.88A5.64 5.64 0 0 0 -68.25 -42.12L-2.82 -4.34A5.64 5.64 0 0 0 2.82 -4.34L68.25 -42.12A5.64 5.64 0 0 0 68.25 -51.88Z"/>
+        <path fill="url(#lr-teal-left)"
+              d="M-70.6 -38.05A5.64 5.64 0 0 0 -79.06 -33.16L-79.06 42.39A5.64 5.64 0 0 0 -76.24 47.27L-10.81 85.05A5.64 5.64 0 0 0 -2.35 80.16L-2.35 4.61A5.64 5.64 0 0 0 -5.17 -0.27Z"/>
+        <path class="fr" fill="#0E1B2C"
+              d="M5.17 -0.27A5.64 5.64 0 0 0 2.35 4.61L2.35 80.16A5.64 5.64 0 0 0 10.81 85.05L76.24 47.27A5.64 5.64 0 0 0 79.06 42.39L79.06 -33.16A5.64 5.64 0 0 0 70.6 -38.05Z"/>
+        <path class="pk" fill="#060C16"
+              d="M11.4 48.95A3.76 3.76 0 0 0 17.04 52.2L51.85 32.11A3.76 3.76 0 0 0 53.73 28.85L53.73 -11.35A3.76 3.76 0 0 0 48.09 -14.6L13.28 5.49A3.76 3.76 0 0 0 11.4 8.75Z"/>
+        <path fill="url(#lr-amber-left)"
+              d="M30.03 55.63A2.82 2.82 0 0 0 34.26 53.18L34.26 22.6A2.82 2.82 0 0 0 32.85 20.16L20.73 13.16A2.82 2.82 0 0 0 16.5 15.61L16.5 46.18A2.82 2.82 0 0 0 17.91 48.63Z"/>
+        <path fill="url(#lr-amber-top)"
+              d="M33.89 18.37A2.82 2.82 0 0 0 36.71 18.37L63.19 3.08A2.82 2.82 0 0 0 63.19 -1.8L51.07 -8.8A2.82 2.82 0 0 0 48.25 -8.8L21.77 6.49A2.82 2.82 0 0 0 21.77 11.37Z"/>
+        <path fill="url(#lr-amber-front)"
+              d="M36.33 53.18A2.82 2.82 0 0 0 40.56 55.63L67.04 40.34A2.82 2.82 0 0 0 68.45 37.89L68.45 7.31A2.82 2.82 0 0 0 64.22 4.87L37.74 20.16A2.82 2.82 0 0 0 36.33 22.6Z"/>
+    </g>
+</svg>

@@ -1,4 +1,12 @@
-# local-registry
+<p align="center">
+  <img alt="GoReleaser Logo" src="./assets/logo-fl.svg?v=3&s=200" height="200" />
+  <h3 align="center">Local-Registry</h3>
+  <p align="center" style="color: #43f9f9">
+    <img height="30" src="https://cdn.simpleicons.org/go/555555/ffffff" alt="Go" />
+  </p>
+</p>
+
+---
 
 Un registry HTTP local pour les releases produites par [goreleaser](https://goreleaser.com) : il sert le catalogue des versions, les binaires et leurs checksums, et accepte la publication d'une nouvelle version en deux temps (envoi des fichiers, puis publication atomique).
 
@@ -20,7 +28,9 @@ Un registry HTTP local pour les releases produites par [goreleaser](https://gore
   - [Authentification de l'upload](#authentification-de-lupload)
   - [`PUT /{vcs}/artifacts/{version}/files/{name}`](#put-vcsartifactsversionfilesname)
   - [`POST /{vcs}/artifacts/{version}/publish`](#post-vcsartifactsversionpublish)
+  - [`GET /{vcs}/artifacts/{version}/files/{name}`](#get-vcsartifactsversionfilesname)
 - [Publier une release pas à pas](#publier-une-release-pas-à-pas)
+- [Le script `upload.sh` (depuis `artifacts.json`)](#le-script-uploadsh-depuis-artifactsjson)
 - [Le script `publish-to-local-registry.sh`](#le-script-publish-to-local-registrysh)
 - [Quotas, espace disque et purge du staging](#quotas-espace-disque-et-purge-du-staging)
 - [Journal d'audit](#journal-daudit)
@@ -126,6 +136,7 @@ Le nom de la variable d'environnement se déduit de l'option : `LOCAL_REGISTRY_`
 | `--min-free-mb` | `LOCAL_REGISTRY_MIN_FREE_MB` | `1024` | Espace disque qu'un envoi doit laisser libre, en MiB. `0` : pas de contrôle. |
 | `--staging-ttl` | `LOCAL_REGISTRY_STAGING_TTL` | `24h` | Durée d'inactivité après laquelle une version en staging est supprimée. Format Go (`90m`, `12h`, `168h`) ; au moins `1h`. `0` : jamais. |
 | `--audit-log` | `LOCAL_REGISTRY_AUDIT_LOG` | `<asset-path>/bin.local/audit.log` | Fichier du [journal d'audit](#journal-daudit). Refusé s'il se trouve dans un arbre public (`bin.local/assets/` ou `assets/`). |
+| `--public-url` | `LOCAL_REGISTRY_PUBLIC_URL` | — | Adresse à laquelle les clients joignent le serveur, ex. `https://registry.example.com` (un sous-chemin est permis : `https://example.com/registry`). Les `path` de l'`artifacts.json` publié deviennent des URL absolues sous cette adresse. Vide : chemins relatifs (`/github/artifacts/v1.2.3/files/…`). Voir [Réécriture d'`artifacts.json`](#réécriture-dartifactsjson). |
 | `--disable-generate-token` | `LOCAL_REGISTRY_DISABLE_GENERATE_TOKEN` | `true` | `false` : générer un token d'upload aléatoire au démarrage et l'afficher sur la sortie standard seulement, si aucun token n'est configuré. Voir [Token généré au démarrage](#token-généré-au-démarrage). |
 | *(aucune option)* | `LOCAL_REGISTRY_UPLOAD_TOKEN` | — | Token de l'upload, clé `upload-token` dans le fichier. Voir [Token d'upload](#token-dupload). |
 
@@ -251,6 +262,7 @@ max-staging-mb     10240                                 default
 min-free-mb        1024                                  default
 staging-ttl        48h0m0s                               flag
 audit-log          /srv/registry/bin.local/audit.log     default
+public-url         https://registry.example.com          config file
 disable-generate-token  true                            default
 upload-token       set (token_id 1ec1c26b50d5)           config file
 ```
@@ -279,6 +291,7 @@ Toute erreur arrête le programme avant le démarrage, avec le code de sortie `2
 | `max-version-mb cannot be negative` (idem pour les autres quotas) | Valeur négative. |
 | `staging-ttl must be 0 or at least 1h0m0s` | Durée trop courte : la purge pourrait supprimer un envoi encore en cours (un envoi peut durer 30 min). |
 | `audit-log … would be downloadable: put it outside bin.local/assets and assets` | Le journal serait téléchargeable par la route de fichiers. |
+| `public-url "…" must be an http or https URL with no user, query or fragment, such as https://registry.example.com` | `--public-url` sans `http://` ou `https://`, ou avec identifiants, `?…` ou `#…`. |
 | `port: "abc" is not a whole number` | Variable d'environnement ou valeur du fichier non numérique. |
 | `staging-ttl: "demain" is not a duration such as 90m or 24h` | Durée illisible. |
 | `invalid argument "abc" for "--port" flag: …` | Option non numérique. |
@@ -430,7 +443,8 @@ Tout vit sous `--asset-path` :
 │   │       └── <vcs>/                   ← ex. gitlab, github
 │   │           ├── artifacts.json       ← version "latest" de <vcs>
 │   │           └── <version>/           ← une version publiée, immuable
-│   │               ├── artifacts.json
+│   │               ├── artifacts.json            ← réécrit : path = URL de téléchargement
+│   │               ├── artifacts.goreleaser.json ← artifacts.json tel qu'envoyé
 │   │               ├── metadata.json
 │   │               ├── <projet>_<version>_checksums.txt
 │   │               └── <projet>_<version>_<os>_<arch>.tar.gz …
@@ -528,6 +542,7 @@ Exceptions : les routes de fichiers (`/assets/binary/`, `/assets/checksum/`) et 
 | `POST` | [`/releases/{version}`](#post-releasesversion) | non | Lister une release de l'ancien arbre |
 | `PUT` | [`/{vcs}/artifacts/{version}/files/{name}`](#put-vcsartifactsversionfilesname) | **oui** | Envoyer un fichier en staging |
 | `POST` | [`/{vcs}/artifacts/{version}/publish`](#post-vcsartifactsversionpublish) | **oui** | Vérifier et publier une version |
+| `GET` | [`/{vcs}/artifacts/{version}/files/{name}`](#get-vcsartifactsversionfilesname) | non | Télécharger un fichier d'une version publiée (les `path` d'`artifacts.json`) |
 
 ---
 
@@ -548,10 +563,10 @@ curl -s http://localhost:8077/gitlab/artifacts
 ```
 
 ```json
-[{"name":"metadata.json","path":"dist/metadata.json","internal_type":36,"type":"Metadata"},{"name":"tool_0.1.0_linux_amd64.tar.gz","path":"dist/tool_0.1.0_linux_amd64.tar.gz","goos":"linux","goarch":"amd64","goamd64":"v1","internal_type":1,"type":"Archive","extra":{"Format":"tar.gz","ID":"default"}}]
+[{"name":"metadata.json","path":"/gitlab/artifacts/v0.1.0/files/metadata.json","internal_type":36,"type":"Metadata"},{"name":"tool_0.1.0_linux_amd64.tar.gz","path":"/gitlab/artifacts/v0.1.0/files/tool_0.1.0_linux_amd64.tar.gz","goos":"linux","goarch":"amd64","goamd64":"v1","internal_type":1,"type":"Archive","extra":{"Format":"tar.gz","ID":"default"}}]
 ```
 
-Le fichier est relu et renvoyé tel quel, quel que soit son contenu JSON (tableau, objet…) ; la mise en forme peut différer de l'original (espaces), pas le contenu. Avec le flux d'upload, c'est le `dist/artifacts.json` de goreleaser (exemple ci-dessus, abrégé).
+Le fichier est relu et renvoyé tel quel, quel que soit son contenu JSON (tableau, objet…) ; la mise en forme peut différer de l'original (espaces), pas le contenu. Avec le flux d'upload, c'est l'`artifacts.json` de goreleaser [réécrit à la publication](#réécriture-dartifactsjson) : chaque `path` est l'URL de téléchargement du fichier sur ce serveur (exemple ci-dessus, abrégé). L'original envoyé reste disponible sous `artifacts.goreleaser.json`.
 
 **Erreurs**
 
@@ -856,7 +871,7 @@ Envoie **un** fichier dans la zone de staging de la version `<vcs>/<version>`. L
 | --- | --- | --- | --- |
 | `vcs` | chemin | oui | Groupe de versions. |
 | `version` | chemin | oui | Version à créer. `latest` est interdit. |
-| `name` | chemin | oui | Nom sous lequel le fichier sera publié (voir [noms autorisés](#noms-autorisés)). |
+| `name` | chemin | oui | Nom sous lequel le fichier sera publié (voir [noms autorisés](#noms-autorisés)). `artifacts.goreleaser.json` est réservé. |
 | `Authorization` | en-tête | oui | `Bearer <token>`. |
 | `X-Checksum-Sha256` | en-tête | non | sha256 attendu, en hexadécimal (majuscules ou minuscules). Si présent et différent du contenu reçu : 422 et rien n'est conservé. |
 | corps | — | oui | Le contenu **brut** du fichier. `Content-Type` est ignoré. |
@@ -903,6 +918,7 @@ tar czf - ./build | curl -fsS -H "$TOKEN_HDR" -T - \
 - Le délai de la requête est de 30 minutes.
 - Les [quotas](#quotas-espace-disque-et-purge-du-staging) sont vérifiés avant la réception, puis une seconde fois, sous verrou, juste avant l'entrée en staging : deux envois parallèles ne peuvent pas dépasser ensemble un quota.
 - Chaque envoi, accepté ou refusé, est inscrit au [journal d'audit](#journal-daudit).
+- **`artifacts.json` s'envoie en dernier.** À sa réception, le serveur le lit et le contrôle avant de l'accepter (voir [Contrôles d'`artifacts.json`](#contrôles-dartifactsjson)) : chaque fichier qu'il publie doit **déjà** être en staging, avec le sha256 de son `extra.Checksum` s'il en a un. Sinon : 422, et rien n'est conservé. Renvoyer `artifacts.json` est toujours possible, il est recontrôlé à chaque fois.
 
 **Erreurs** (dans l'ordre où elles sont vérifiées)
 
@@ -912,6 +928,7 @@ tar czf - ./build | curl -fsS -H "$TOKEN_HDR" -T - \
 | `401` | `invalid or missing bearer token` | Token absent ou faux. |
 | `400` | `invalid vcs or version name` | `vcs` ou `version` refusé, ou `version` vaut `latest`. |
 | `400` | `invalid file name: use [A-Za-z0-9._-] only` | `name` refusé. |
+| `400` | `artifacts.goreleaser.json is reserved: publishing writes it` | Nom réservé à la copie d'origine écrite par la publication. |
 | `409` | `version gitlab/v0.1.0 is already published and cannot be changed` | La version est déjà publiée. |
 | `422` | `version gitlab/v0.1.0 already has 100 staged files (limit 100)` | `--max-version-files` atteint. Remplacer un fichier déjà en staging reste possible. |
 | `413` | `file exceeds 209715200 bytes` | Le fichier dépasse `--max-upload-mb`. |
@@ -919,6 +936,8 @@ tar czf - ./build | curl -fsS -H "$TOKEN_HDR" -T - \
 | `507` | `upload staging area is full (limit 10737418240 bytes): publish or abandon pending versions` | Avec ce fichier, le staging de toutes les versions dépasserait `--max-staging-mb`. |
 | `507` | `not enough free disk space on the registry` | L'envoi laisserait moins de `--min-free-mb` libres sur le disque. |
 | `422` | `sha256 mismatch: got <reçu>, X-Checksum-Sha256 says <attendu>` | L'en-tête ne correspond pas au contenu reçu. |
+| `422` | `artifacts.json references <nom>, which is not uploaded: upload every file first, artifacts.json last` | `artifacts.json` envoyé avant un fichier qu'il publie. Envoyez le fichier, puis `artifacts.json` à nouveau. |
+| `422` | autres messages `artifacts.json …` | Voir [Contrôles d'`artifacts.json`](#contrôles-dartifactsjson). |
 | `500` | `internal error` | Erreur disque, ou connexion coupée par le client pendant l'envoi. |
 
 ---
@@ -953,13 +972,13 @@ curl -fsS -X POST -H "$TOKEN_HDR" "http://localhost:8077/gitlab/artifacts/v0.0.9
 **Réponse `200 OK`**
 
 ```json
-{"vcs":"gitlab","version":"v0.1.0","files":["artifacts.json","metadata.json","tool_0.1.0_checksums.txt","tool_0.1.0_darwin_amd64.tar.gz","tool_0.1.0_linux_amd64.tar.gz"],"latest":true}
+{"vcs":"gitlab","version":"v0.1.0","files":["artifacts.goreleaser.json","artifacts.json","metadata.json","tool_0.1.0_checksums.txt","tool_0.1.0_darwin_amd64.tar.gz","tool_0.1.0_linux_amd64.tar.gz"],"latest":true}
 ```
 
 | Champ | Contenu |
 | --- | --- |
 | `vcs`, `version` | La version publiée. |
-| `files` | Fichiers publiés, triés par nom. |
+| `files` | Fichiers publiés, triés par nom, y compris `artifacts.goreleaser.json` écrit par la publication. |
 | `latest` | `true` si `<vcs>/artifacts.json` a été remplacé. |
 
 **Contrôles effectués avant publication**
@@ -970,9 +989,10 @@ Tous doivent passer, sinon rien n'est publié et le staging reste en place :
 2. **`artifacts.json` et `metadata.json` présents.**
 3. **Fichier de checksums lisible** : chaque ligne non vide est exactement `<sha256 sur 64 caractères> <espaces> <nom>`, le format de goreleaser et de `sha256sum` (un `*` devant le nom, mode binaire de `sha256sum`, est accepté).
 4. **Chaque fichier envoyé est listé et intact** : son nom figure dans le fichier de checksums et son sha256 correspond. Sont dispensés : le fichier de checksums lui-même, `artifacts.json`, `metadata.json`, et les fichiers finissant par `.sig` ou `.pem` (signatures). Les lignes du fichier de checksums qui désignent un fichier non envoyé sont tolérées.
-5. **`artifacts.json` est du JSON valide.**
+5. **`artifacts.json` est recontrôlé** comme à son envoi (voir [Contrôles d'`artifacts.json`](#contrôles-dartifactsjson)) : un fichier supprimé ou remplacé après lui est détecté ici.
 6. **`metadata.json` est un objet JSON** qui contient `tag` ou `version`.
 7. **La version correspond** : `{version}` est égal au `tag`, à la `version`, ou à `v` + `version` de `metadata.json`.
+8. **Chaque fichier envoyé figure dans `artifacts.json`** parmi les fichiers publiés. Seuls `artifacts.json` et `metadata.json` en sont dispensés. Un fichier en trop (essai précédent, mauvais dossier) fait refuser la publication.
 
 | `{version}` dans l'URL | `metadata.json` | Résultat |
 | --- | --- | --- |
@@ -983,8 +1003,93 @@ Tous doivent passer, sinon rien n'est publié et le staging reste en place :
 
 **Ce que fait la publication**
 
-1. Le dossier de staging `bin.local/.uploads/<vcs>/<version>/` est **renommé** en `bin.local/assets/binaries/<vcs>/<version>/` : la version apparaît en une seule opération, complète.
-2. Avec `latest=true`, `bin.local/assets/binaries/<vcs>/artifacts.json` est remplacé par une copie de l'`artifacts.json` de la version, via un fichier temporaire puis un renommage : un lecteur voit l'ancien ou le nouveau fichier, jamais un fichier à moitié écrit.
+1. Dans le staging, avant tout renommage : l'`artifacts.json` envoyé est copié en `artifacts.goreleaser.json`, puis remplacé par sa [version réécrite](#réécriture-dartifactsjson). La version publiée ne montre donc jamais l'`artifacts.json` d'origine sous ce nom.
+2. Le dossier de staging `bin.local/.uploads/<vcs>/<version>/` est **renommé** en `bin.local/assets/binaries/<vcs>/<version>/` : la version apparaît en une seule opération, complète.
+3. Avec `latest=true`, `bin.local/assets/binaries/<vcs>/artifacts.json` est remplacé par une copie de l'`artifacts.json` **réécrit** de la version, via un fichier temporaire puis un renommage : un lecteur voit l'ancien ou le nouveau fichier, jamais un fichier à moitié écrit.
+
+#### Contrôles d'`artifacts.json`
+
+Faits à l'envoi d'`artifacts.json` (`PUT`, 422 en cas d'échec) puis à nouveau à la publication (contrôle 5).
+
+Une entrée est un **fichier publié** si son `type` est l'un de `Archive`, `File`, `Source`, `Linux Package`, `Checksum`, `Signature`, `Certificate`, `SBOM`, `Metadata`, ou `Binary` **avec** `extra.Format` (binaire livré tel quel, `formats: [binary]` de goreleaser). Les autres entrées sont ignorées : en particulier un `Binary` **sans** `extra.Format` est la sortie brute du build (`dist/<id>_<os>_<arch>/<binaire>`), le fichier dont l'archive a été faite ; plusieurs portent le même nom et aucun ne figure dans le fichier de checksums.
+
+| Contrôle | Message (422) |
+| --- | --- |
+| Le fichier est un tableau JSON d'objets | `artifacts.json is not a JSON array of objects`, `artifacts.json: entry 3 is null` |
+| `name`, `path`, `type` sont des chaînes | `artifacts.json: name, path and type must be strings: …` |
+| Chaque fichier publié a un nom | `artifacts.json: a Archive entry has no name` |
+| Aucun nom n'apparaît deux fois | `artifacts.json lists <nom> twice` |
+| Chaque nom est un [nom autorisé](#noms-autorisés), autre que `artifacts.json` et `artifacts.goreleaser.json` | `artifacts.json lists "<nom>", a name that cannot be uploaded` |
+| Chaque fichier publié est en staging | `artifacts.json references <nom>, which is not uploaded: upload every file first, artifacts.json last` |
+| Son sha256 correspond à `extra.Checksum` quand celui-ci commence par `sha256:` | `<nom>: sha256 is <réel> but artifacts.json says <attendu>` |
+| `artifacts.json` fait au plus 32 MiB | `artifacts.json is larger than 32 MiB` |
+
+#### Réécriture d'`artifacts.json`
+
+L'`artifacts.json` publié ne contient que les fichiers publiés (les entrées ignorées ci-dessus sont retirées), dans l'ordre d'origine. Dans chaque entrée, seul `path` change : il devient l'URL de [`GET /{vcs}/artifacts/{version}/files/{name}`](#get-vcsartifactsversionfilesname). Tous les autres champs (`goos`, `goarch`, `extra`, `internal_type`…) sont recopiés tels quels ; seul l'ordre des champs dans un objet peut changer (alphabétique), et le fichier est indenté de 2 espaces.
+
+| `--public-url` | `path` de `ci-bridge-vcs-github_Linux_arm64` pour `github` `v1.2.3` |
+| --- | --- |
+| vide (défaut) | `/github/artifacts/v1.2.3/files/ci-bridge-vcs-github_Linux_arm64` |
+| `https://registry.example.com` | `https://registry.example.com/github/artifacts/v1.2.3/files/ci-bridge-vcs-github_Linux_arm64` |
+| `https://example.com/registry/` | `https://example.com/registry/github/artifacts/v1.2.3/files/ci-bridge-vcs-github_Linux_arm64` |
+
+Un chemin relatif se résout contre l'adresse à laquelle le client a lu `artifacts.json` (`new URL(path, base)` en JavaScript, `url.ResolveReference` en Go, `curl "$URL$path"` en shell). Utilisez `--public-url` derrière un reverse proxy qui ajoute un préfixe, ou si les clients copient les URL ailleurs : le serveur ne peut pas deviner son adresse publique (l'en-tête `Host` est fourni par le client et n'est pas utilisé).
+
+Exemple, pour une entrée de l'`artifacts.json` envoyé par goreleaser :
+
+```json
+{
+  "name": "ci-bridge-vcs-github_Linux_arm64",
+  "path": "bin.local/assets/binaries/github/github_linux_arm64_v8.0/ci-bridge-vcs-github",
+  "goos": "linux",
+  "goarch": "arm64",
+  "goarm64": "v8.0",
+  "target": "linux_arm64_v8.0",
+  "internal_type": 2,
+  "type": "Binary",
+  "extra": {
+    "Binary": "ci-bridge-vcs-github",
+    "Checksum": "sha256:2b5136e7b2152df8bd1a571a48f1b357f7d444cc2d500c350a5833ba5a3bcfe9",
+    "Format": "binary",
+    "ID": "vcs-github-plugin-archive"
+  }
+}
+```
+
+l'`artifacts.json` publié contient, avec `--public-url https://registry.example.com` :
+
+```json
+{
+  "extra": {
+    "Binary": "ci-bridge-vcs-github",
+    "Checksum": "sha256:2b5136e7b2152df8bd1a571a48f1b357f7d444cc2d500c350a5833ba5a3bcfe9",
+    "Format": "binary",
+    "ID": "vcs-github-plugin-archive"
+  },
+  "goarch": "arm64",
+  "goarm64": "v8.0",
+  "goos": "linux",
+  "internal_type": 2,
+  "name": "ci-bridge-vcs-github_Linux_arm64",
+  "path": "https://registry.example.com/github/artifacts/v1.2.3/files/ci-bridge-vcs-github_Linux_arm64",
+  "target": "linux_arm64_v8.0",
+  "type": "Binary"
+}
+```
+
+et les entrées `"type": "Binary"` sans `extra.Format` (ex. `"path": "…/github_linux_arm64_v8.0/ci-bridge-vcs-github"`, `"internal_type": 4`) ont disparu.
+
+Pour télécharger tous les fichiers d'une version à partir de son `artifacts.json` :
+
+```sh
+URL=http://localhost:8077
+curl -fsS "$URL/github/artifacts/v1.2.3" | jq -r '.[] | [.name, .path] | @tsv' |
+  while IFS=$'\t' read -r name path; do
+    case $path in http*) ;; *) path=$URL$path ;; esac   # relatif ou absolu
+    curl -fsS -o "$name" "$path"
+  done
+```
 
 **Erreurs** (dans l'ordre où elles sont vérifiées)
 
@@ -1001,11 +1106,51 @@ Tous doivent passer, sinon rien n'est publié et le staging reste en place :
 | `422` | `tool_0.1.0_checksums.txt: line 3 is not "<sha256>  <name>"` | Contrôle 3. |
 | `422` | `extra.bin is not listed in tool_0.1.0_checksums.txt` | Contrôle 4. |
 | `422` | `tool_0.1.0_linux_amd64.tar.gz: sha256 is <réel> but tool_0.1.0_checksums.txt says <attendu>` | Contrôle 4. |
-| `422` | `artifacts.json is not valid JSON` | Contrôle 5. |
+| `422` | messages `artifacts.json …` du tableau [Contrôles d'`artifacts.json`](#contrôles-dartifactsjson) | Contrôle 5. |
+| `422` | `<nom> is uploaded but artifacts.json does not list it` | Contrôle 8. |
 | `422` | `metadata.json is not valid JSON` | Contrôle 6. |
 | `422` | `metadata.json has neither tag nor version` | Contrôle 6. |
 | `422` | `metadata.json describes v0.2.0 (version 0.2.0), not v0.1.0` | Contrôle 7. |
-| `500` | `internal error` | Erreur disque. Si l'erreur survient en mettant à jour latest, **la version est publiée** mais latest n'a pas changé (le log le précise : `version published but latest not updated`). |
+| `500` | `internal error` | Erreur disque. Si l'erreur survient en mettant à jour latest, **la version est publiée** mais latest n'a pas changé (le log le précise : `version published but latest not updated`). Si elle survient pendant la réécriture d'`artifacts.json`, rien n'est publié ; un nouvel appel repart de l'`artifacts.json` d'origine. |
+
+---
+
+### `GET /{vcs}/artifacts/{version}/files/{name}`
+
+Télécharge le fichier `<name>` de la version **publiée** `<vcs>/<version>`. C'est l'URL que la publication écrit dans les `path` d'`artifacts.json`. Pas d'authentification.
+
+**Paramètres**
+
+| Nom | Où | Description |
+| --- | --- | --- |
+| `vcs` | chemin | Groupe de versions. |
+| `version` | chemin | Version publiée. `latest` n'est pas accepté (404) : lisez la version dans `GET /{vcs}/artifacts`. |
+| `name` | chemin | Nom du fichier, tel que dans `artifacts.json` (`name`). |
+
+**Exemples**
+
+```sh
+# Télécharger un binaire sous son nom (-O : nom tiré de l'URL)
+curl -fsSO http://localhost:8077/github/artifacts/v1.2.3/files/ci-bridge-vcs-github_Linux_arm64
+
+# Vérifier son sha256 avec le fichier de checksums de la version
+curl -fsS http://localhost:8077/github/artifacts/v1.2.3/files/ci-bridge-vcs-github_checksums.txt |
+  grep ' ci-bridge-vcs-github_Linux_arm64$' | shasum -a 256 -c
+
+# L'artifacts.json tel qu'envoyé par goreleaser
+curl -fsS http://localhost:8077/github/artifacts/v1.2.3/files/artifacts.goreleaser.json
+
+# Reprendre un téléchargement interrompu
+curl -fsS -C - -O http://localhost:8077/github/artifacts/v1.2.3/files/ci-bridge-vcs-github_Windows_x86_64.zip
+```
+
+**Réponse `200 OK`** : le contenu brut, avec les mêmes en-têtes que [`/assets/binary`](#get-assetsbinaryfilepath) : `Content-Type: application/octet-stream`, `Content-Disposition: attachment; filename=<name>`, `Content-Length`, `Last-Modified`, `Accept-Ranges: bytes`. `HEAD`, `Range` et `If-Modified-Since` fonctionnent.
+
+**Erreurs**
+
+| Code | Cause |
+| --- | --- |
+| `404` | Version non publiée (un fichier en staging n'est jamais servi), `version` vaut `latest`, nom refusé ou commençant par `.`, fichier absent, dossier, ou lien symbolique qui sort du dossier de la version. |
 
 ---
 
@@ -1036,7 +1181,7 @@ while read -r sum name; do
   auth | curl -fsS -H @- -H "X-Checksum-Sha256: $sum" -T "dist/$name" "$URL/gitlab/artifacts/$V/files/$name"
 done < dist/tool_0.1.0_checksums.txt
 
-# 2. Le fichier de checksums et les métadonnées
+# 2. Le fichier de checksums et les métadonnées ; artifacts.json en DERNIER (refusé sinon)
 for f in tool_0.1.0_checksums.txt metadata.json artifacts.json; do
   auth | curl -fsS -H @- -T "dist/$f" "$URL/gitlab/artifacts/$V/files/$f"
 done
@@ -1055,6 +1200,74 @@ curl -s "$URL/gitlab/artifacts"
 ### Pourquoi pas un bloc `publishers:` goreleaser
 
 goreleaser (vérifié avec 2.18.2) lance ses `publishers:` **avant** d'écrire `dist/artifacts.json`, dans un ordre quelconque, et l'édition open source n'a pas de hook à la fin de la release. Un bloc `publishers:` seul ne peut donc ni envoyer `artifacts.json`, ni appeler `publish` au bon moment. Lancez le script après `goreleaser release`, par exemple dans la même étape de CI.
+
+---
+
+## Le script `upload.sh` (depuis `artifacts.json`)
+
+`scripts/upload.sh` envoie au registry **tous les fichiers publiés listés dans un `artifacts.json`** de goreleaser, chacun sous son `name` et lu depuis son `path`, puis publie la version. C'est le script à utiliser quand les fichiers ne sont pas tous à la racine du dossier de sortie, par exemple avec `formats: [binary]` : `ci-bridge-vcs-github_Linux_arm64` est alors lu depuis `…/github_linux_arm64_v8.0/ci-bridge-vcs-github`.
+
+Il faut `bash` (la version 3.2 de macOS suffit), `curl` et `jq`.
+
+### Utilisation
+
+```
+upload.sh [--latest] [--dry-run] [--root DIR] [--version V] <vcs> [artifacts.json]
+```
+
+| Argument | Obligatoire | Description |
+| --- | --- | --- |
+| `--latest` | non | Publie avec `?latest=true`. |
+| `--dry-run` | non | Affiche ce qui serait envoyé, sans rien envoyer (ni token ni URL nécessaires). Les fichiers sont tout de même contrôlés. |
+| `--root DIR` | non | Dossier auquel les `path` sont relatifs : le dossier où goreleaser a tourné. Par défaut, le script le déduit de l'emplacement d'`artifacts.json` (voir ci-dessous) ; sinon, le dossier courant. |
+| `--version V` | non | Version à publier. Défaut : `tag` (à défaut `version`) du `metadata.json` listé. |
+| `<vcs>` | oui | Groupe de versions (ex. `github`). |
+| `[artifacts.json]` | non | Chemin de l'`artifacts.json`. Défaut : `dist/artifacts.json`. |
+
+| Variable | Obligatoire | Description |
+| --- | --- | --- |
+| `LOCAL_REGISTRY_URL` | oui (sauf `--dry-run`) | Adresse du registry (ex. `http://localhost:8077`) ; un `/` final est retiré. |
+| `LOCAL_REGISTRY_UPLOAD_TOKEN` | oui (sauf `--dry-run`) | Le token du serveur, transmis à curl par l'entrée standard, jamais en argument. |
+
+**Déduction de `--root`.** Les `path` sont relatifs au dossier de travail de goreleaser (`bin.local/assets/binaries/github/metadata.json`). L'entrée `Metadata` (ou `Checksum`) est à côté d'`artifacts.json` : si le dossier d'`artifacts.json` finit par le dossier de ce `path`, le script retire ce suffixe. On peut donc lancer le script depuis n'importe où :
+
+```sh
+# depuis le projet goreleaser
+scripts/upload.sh --latest github bin.local/assets/binaries/github/artifacts.json
+# depuis ailleurs : même résultat
+/opt/registry/scripts/upload.sh --latest github ~/src/sonarbridge-go/bin.local/assets/binaries/github/artifacts.json
+```
+
+### Ce qu'il fait
+
+1. Lit `artifacts.json` et retient les fichiers publiés, avec la même règle que le serveur (voir [Contrôles d'`artifacts.json`](#contrôles-dartifactsjson)) : les binaires bruts du build sont ignorés.
+2. **Avant tout envoi**, vérifie qu'aucun nom n'apparaît deux fois, que chaque fichier existe sur le disque et qu'un fichier de checksums est listé. Sinon il s'arrête sans rien envoyer.
+3. Lit la version dans `metadata.json` (sauf `--version`).
+4. Envoie chaque fichier, dans l'ordre d'`artifacts.json`, avec `X-Checksum-Sha256` quand l'entrée a un `extra.Checksum` en `sha256:`.
+5. Envoie `artifacts.json` **en dernier**, puis appelle `publish` et affiche la réponse.
+
+### Sortie
+
+```
+== github v1.2.3 from bin.local/assets/binaries/github/artifacts.json (root /home/me/sonarbridge-go)
+PUT metadata.json <- /home/me/sonarbridge-go/bin.local/assets/binaries/github/metadata.json
+PUT ci-bridge-vcs-github_Linux_arm64 <- /home/me/sonarbridge-go/bin.local/assets/binaries/github/github_linux_arm64_v8.0/ci-bridge-vcs-github (sha256 2b5136e7…)
+…
+PUT ci-bridge-vcs-github_checksums.txt <- /home/me/sonarbridge-go/bin.local/assets/binaries/github/ci-bridge-vcs-github_checksums.txt
+PUT artifacts.json <- bin.local/assets/binaries/github/artifacts.json
+POST publish github/v1.2.3 (latest=true)
+{"vcs":"github","version":"v1.2.3","files":[…],"latest":true}
+```
+
+### Codes de sortie
+
+| Code | Situation |
+| --- | --- |
+| `0` | Version publiée (ou `--dry-run` sans erreur). |
+| `1` | `jq`/`curl` absent, `artifacts.json` illisible, fichier manquant, nom en double, pas de fichier de checksums, version introuvable, variable manquante, ou refus du serveur (son message est affiché, ex. `{"error":"version github/v1.2.3 is already published and cannot be changed"}`). |
+| `2` | Option inconnue ou arguments incorrects : l'aide est affichée. |
+
+En cas d'échec avant la publication, corrigez la cause et relancez le script : les fichiers déjà en staging sont remplacés.
 
 ---
 
@@ -1177,7 +1390,7 @@ Chaque événement de sécurité des routes d'upload est ajouté au fichier `--a
 | `auth_failed` | 401 ou 403 sur une route d'upload | `method`, `path`, `status`, `error`, `authorization_sent` (un en-tête `Authorization` était-il présent) |
 | `upload` | `PUT` accepté | `vcs`, `version`, `name`, `size`, `sha256`, `replaced` (un fichier du même nom a été remplacé), `token_id` |
 | `upload_refused` | `PUT` refusé après authentification | `vcs`, `version`, `name`, `status`, `error`, `token_id` |
-| `publish` | `publish` réussi | `vcs`, `version`, `latest`, `files` (liste de `{name, size, sha256}` pour **chaque** fichier publié), `token_id` |
+| `publish` | `publish` réussi | `vcs`, `version`, `latest`, `files` (liste de `{name, size, sha256}` pour **chaque** fichier publié : `artifacts.json` y figure sous sa forme réécrite, `artifacts.goreleaser.json` sous sa forme envoyée), `token_id` |
 | `publish_refused` | `publish` refusé après authentification | `vcs`, `version`, `status`, `error`, `token_id` |
 | `staging_purged` | Purge d'une version en staging | `vcs`, `version`, `files`, `bytes`, `idle` (durée d'inactivité, ex. `26h3m12s`) |
 | `tmp_purged` | Purge de fichiers temporaires | `files` |
@@ -1273,6 +1486,7 @@ shasum -a 256 /srv/registry/bin.local/assets/binaries/gitlab/v0.1.0/tool_0.1.0_l
 | Une version apparaît complète ou pas du tout                           | `publish` renomme le dossier de staging en une seule opération. Un lecteur ne voit jamais une version à moitié copiée.                              |
 | Une version publiée est vérifiée                                       | Chaque fichier est contrôlé contre le fichier de checksums avant publication.                                                                       |
 | `latest` change d'un bloc                                              | Le nouveau `artifacts.json` est écrit à côté puis renommé par-dessus l'ancien.                                                                      |
+| Les `path` d'une version publiée désignent ses fichiers                | `artifacts.json` est réécrit dans le staging, avant le renommage ; chaque fichier qu'il désigne a été contrôlé (présence, sha256).                   |
 | Une version publiée ne change plus                                     | `PUT` et `publish` répondent 409. Les clients qui lisent une version et son sha256 dans ce registry obtiennent toujours les mêmes octets.           |
 | Deux envois parallèles ne dépassent pas ensemble un quota              | Les quotas sont revérifiés sous le même verrou, juste avant l'entrée en staging.                                                                    |
 | Aucun fichier n'entre dans une version pendant ou après sa publication | Les déplacements vers le staging et la publication sont sérialisés par un verrou ; la présence de la version publiée est revérifiée sous ce verrou. |
@@ -1346,7 +1560,7 @@ if err := s.SetTLS("fullchain.pem", "privkey.pem"); err != nil {
 	log.Fatal(err)
 }
 
-// Upload (PUT .../files/{name} et POST .../publish)
+// Upload (PUT .../files/{name}, POST .../publish) et téléchargement (GET .../files/{name})
 s.AddUploadRoutes(localregistry.UploadConfig{
 	Token:       os.Getenv("LOCAL_REGISTRY_UPLOAD_TOKEN"), // vide = upload désactivé (403)
 	MaxFileSize: 500 << 20,                                // octets ; 0 = DefaultMaxFileSize (200 MiB)
@@ -1355,6 +1569,7 @@ s.AddUploadRoutes(localregistry.UploadConfig{
 	MaxStagingSize:  -1,             // pas de limite
 	MinFreeSpace:    0,              // 0 = DefaultMinFreeSpace (1 GiB) ; négatif = pas de contrôle
 	StagingTTL:      48 * time.Hour, // 0 = DefaultStagingTTL (24 h) ; négatif = pas de purge
+	PublicURL:       "https://registry.example.com", // vide = path relatifs dans artifacts.json
 })
 
 // Journal d'audit (sans lui, les événements vont dans slog)
@@ -1397,7 +1612,7 @@ s.Serve() // bloque jusqu'à SIGINT/SIGTERM ; sort du processus en code 1 si le 
 | `SetTLS(certFile, keyFile) error`               | Passe le serveur en HTTPS seul (TLS 1.2 minimum). Charge la paire immédiatement ; en cas d'erreur, le serveur reste en HTTP.                                                                                              |
 | `TLSEnabled() bool`                             | `true` après un `SetTLS` réussi.                                                                                                                                                                                          |
 | `IsPublicFile(name) bool`                       | `true` si `name` (chemin relatif, séparé par `/`) est servi par les routes de fichiers : sous `bin.local/assets/` ou `assets/`, sans élément commençant par `.`.                                                          |
-| `AddUploadRoutes(cfg)`                          | Enregistre les deux routes d'upload. Les champs de `UploadConfig` à `0` prennent leur valeur `Default*` ; un champ négatif désactive sa limite (sauf `MaxFileSize`, où négatif = défaut).                                 |
+| `AddUploadRoutes(cfg)`                          | Enregistre les deux routes d'upload, et `GET /{vcs}/artifacts/{version}/files/{name}` vers laquelle pointent les `path` réécrits d'`artifacts.json`. Les champs de `UploadConfig` à `0` prennent leur valeur `Default*` ; un champ négatif désactive sa limite (sauf `MaxFileSize`, où négatif = défaut).                                 |
 | `OpenAuditLog(path) (*AuditLog, error)`         | Ouvre (ou crée en `0600`) un journal d'audit en ajout. `Close()` le ferme.                                                                                                                                                |
 | `SetAuditLog(a)`                                | Envoie les événements d'audit dans `a`. Sans appel, ils vont dans `slog` au niveau INFO (message `audit`).                                                                                                                |
 | `Serve()`                                       | Lance le serveur, gère les signaux et l'arrêt propre, quitte le processus en code 1 en cas d'erreur.                                                                                                                      |
@@ -1508,6 +1723,10 @@ contents, err := a.FindAssetContents(l.AssetsDir()) // []AssetContents : contenu
 | 507 `not enough free disk space …`                                                               | Le disque du registry est presque plein : libérez de la place ou baissez `--min-free-mb`.                                                                                                                                                                              |
 | 422 `… is not listed in …_checksums.txt`                                                         | Un fichier envoyé n'est pas dans le fichier de checksums (ex. un SBOM). Ne l'envoyez pas, ou faites-le inclure par goreleaser dans les checksums.                                                                                                                      |
 | 422 `… sha256 is … but … says …`                                                                 | Le fichier a changé depuis la génération des checksums, ou un mauvais fichier a été envoyé sous ce nom. Renvoyez le bon fichier.                                                                                                                                       |
+| 422 `artifacts.json references …, which is not uploaded` | `artifacts.json` a été envoyé avant un fichier qu'il publie : envoyez ce fichier, puis `artifacts.json` à nouveau. `scripts/upload.sh` respecte cet ordre. |
+| 422 `… is uploaded but artifacts.json does not list it` | Un fichier en trop est en staging (essai précédent, binaire brut du build). [Abandonnez le staging](#abandonner-un-envoi) et renvoyez la release, ou utilisez `scripts/upload.sh`, qui n'envoie que les fichiers publiés. |
+| Les `path` d'`artifacts.json` sont relatifs (`/github/…`) | Comportement par défaut : préfixez-les par l'adresse du registry, ou lancez le serveur avec `--public-url https://…` (les versions déjà publiées gardent leurs `path`). |
+| 404 sur un `path` d'`artifacts.json` derrière un reverse proxy | Le proxy ajoute un préfixe ou change d'hôte : donnez l'adresse publique complète à `--public-url` (ex. `https://example.com/registry`). |
 | 422 `metadata.json describes …, not …`                                                           | La version de l'URL ne correspond pas au tag goreleaser ; le script lit la version dans `metadata.json`, utilisez-le.                                                                                                                                                  |
 | 301 inattendu                                                                                    | L'URL contient `..` ou `//` en clair ; le serveur redirige vers le chemin nettoyé.                                                                                                                                                                                     |
 | Le client voit la connexion coupée sur un gros téléchargement                                    | Le délai d'écriture des routes de lecture est de 20 s : utilisez `Range` (`curl -C -`) pour reprendre, ou téléchargez depuis une connexion plus rapide.                                                                                                                |

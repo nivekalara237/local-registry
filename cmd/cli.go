@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -140,6 +141,7 @@ Use absolute paths: relative ones are resolved from the working directory.
   tls-key: /etc/local-registry/privkey.pem
   max-version-mb: 4096
   staging-ttl: 48h
+  public-url: https://registry.example.com
   upload-token: change-me        # keep this file chmod 600
 
 The upload token is read from ` + envPrefix + `_UPLOAD_TOKEN or upload-token in the file, never
@@ -220,6 +222,7 @@ func addFlags(fs *pflag.FlagSet) {
 	fs.Int64("min-free-mb", localregistry.DefaultMinFreeSpace>>20, "disk space an upload must leave free, in MiB (0: no check)")
 	fs.Duration("staging-ttl", localregistry.DefaultStagingTTL, "purge staged versions untouched for this long, at least 1h (0: never)")
 	fs.String("audit-log", "", "audit log file (default <asset-path>/bin.local/audit.log)")
+	fs.String("public-url", "", "address clients reach the server at, e.g. https://registry.example.com: published artifacts.json paths become absolute URLs under it (default: relative paths)")
 	fs.Bool("disable-generate-token", true, "with =false, generate a random upload token at startup and print it on stdout only, unless a token is configured")
 	fs.SortFlags = false
 	fs.VisitAll(func(f *pflag.Flag) {
@@ -313,6 +316,7 @@ func loadConfig(v *viper.Viper, fs *pflag.FlagSet, stderr io.Writer) (arguments,
 	a.maxStagingMB = i64("max-staging-mb")
 	a.minFreeMB = i64("min-free-mb")
 	a.auditLog = path("audit-log")
+	a.publicURL = str("public-url")
 	a.uploadToken = str(tokenKey)
 	if a.uploadToken != "" {
 		a.tokenSource = source(v, fs, tokenKey)
@@ -392,6 +396,15 @@ func validate(a *arguments) error {
 		return usagef("staging-ttl must be 0 or at least %s", minStagingTTL)
 	}
 
+	if a.publicURL != "" {
+		u, err := url.Parse(a.publicURL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" ||
+			u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.HasSuffix(a.publicURL, "?") {
+			return usagef("public-url %q must be an http or https URL with no user, query or fragment, such as https://registry.example.com", a.publicURL)
+		}
+		a.publicURL = strings.TrimRight(a.publicURL, "/")
+	}
+
 	if a.auditLog == "" {
 		a.auditLog = filepath.Join(a.absAsset, "bin.local", "audit.log")
 	}
@@ -449,6 +462,7 @@ func printConfig(w io.Writer, v *viper.Viper, fs *pflag.FlagSet, a arguments) {
 		{"min-free-mb", fmt.Sprint(a.minFreeMB)},
 		{"staging-ttl", a.stagingTTL.String()},
 		{"audit-log", a.auditLog},
+		{"public-url", a.publicURL},
 		{"disable-generate-token", fmt.Sprint(!a.generateToken)},
 		{tokenKey, token},
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -67,12 +68,37 @@ func sha(s string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// releaseArtifacts is the artifacts.json of release(). The build output entry ("Binary"
+// without extra.Format) names no uploaded file: publishing drops it.
+func releaseArtifacts() []map[string]any {
+	return []map[string]any{
+		{"name": "metadata.json", "path": "dist/metadata.json", "internal_type": 36, "type": "Metadata"},
+		{"name": "tool", "path": "dist/tool_linux_amd64_v1/tool", "goos": "linux", "goarch": "amd64", "internal_type": 4, "type": "Binary",
+			"extra": map[string]any{"Binary": "tool", "Builder": "go", "ID": "tool"}},
+		{"name": "tool_0.1.0_linux_amd64.tar.gz", "path": "dist/tool_0.1.0_linux_amd64.tar.gz", "goos": "linux", "goarch": "amd64",
+			"internal_type": 1, "type": "Archive", "extra": map[string]any{"Format": "tar.gz", "ID": "tool"}},
+		{"name": "tool_0.1.0_darwin_arm64.tar.gz", "path": "dist/tool_0.1.0_darwin_arm64.tar.gz", "goos": "darwin", "goarch": "arm64",
+			"internal_type": 1, "type": "Archive", "extra": map[string]any{"Checksum": "sha256:" + sha("DARWIN"), "Format": "tar.gz", "ID": "tool"}},
+		{"name": "tool_0.1.0_checksums.txt", "path": "dist/tool_0.1.0_checksums.txt", "internal_type": 12, "type": "Checksum", "extra": map[string]any{}},
+	}
+}
+
+func encodeArtifacts(t *testing.T, entries []map[string]any) string {
+	t.Helper()
+	b, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
 // release is a goreleaser-like dist for gitlab v0.1.0, keyed by file name.
 func release() map[string]string {
+	b, _ := json.MarshalIndent(releaseArtifacts(), "", "  ")
 	files := map[string]string{
 		"tool_0.1.0_linux_amd64.tar.gz":  "LINUX",
 		"tool_0.1.0_darwin_arm64.tar.gz": "DARWIN",
-		"artifacts.json":                 `[{"name":"tool_0.1.0_linux_amd64.tar.gz"}]`,
+		"artifacts.json":                 string(b),
 		"metadata.json":                  `{"project_name":"tool","tag":"v0.1.0","version":"0.1.0"}`,
 	}
 	files["tool_0.1.0_checksums.txt"] = sha("DARWIN") + "  tool_0.1.0_darwin_arm64.tar.gz\n" +
@@ -80,9 +106,15 @@ func release() map[string]string {
 	return files
 }
 
+// putAll uploads files, artifacts.json last as the server requires.
 func putAll(t *testing.T, h http.Handler, version string, files map[string]string) {
 	t.Helper()
-	for name, content := range files {
+	names := slices.Sorted(maps.Keys(files))
+	if i := slices.Index(names, "artifacts.json"); i >= 0 {
+		names = append(slices.Delete(names, i, i+1), "artifacts.json")
+	}
+	for _, name := range names {
+		content := files[name]
 		rec, res := do(t, h, call{method: "PUT", target: "/gitlab/artifacts/" + version + "/files/" + name, body: content, token: testToken})
 		if rec.Code != http.StatusCreated {
 			t.Fatalf("PUT %s: status = %d, body = %s", name, rec.Code, rec.Body)
@@ -109,20 +141,24 @@ func TestUploadAndPublish(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("publish: status = %d, body = %s", rec.Code, rec.Body)
 	}
-	if res["latest"] != true || res["vcs"] != "gitlab" || res["version"] != "v0.1.0" || len(res["files"].([]any)) != len(files) {
+	if res["latest"] != true || res["vcs"] != "gitlab" || res["version"] != "v0.1.0" || len(res["files"].([]any)) != len(files)+1 {
 		t.Fatalf("publish: response = %v", res)
 	}
 
 	final, _ := l.VersionDir("gitlab", "v0.1.0")
 	for name, content := range files {
+		if name == "artifacts.json" {
+			name = "artifacts.goreleaser.json" // kept as uploaded
+		}
 		got, err := os.ReadFile(filepath.Join(final, name))
 		if err != nil || string(got) != content {
 			t.Fatalf("published %s = %q, %v", name, got, err)
 		}
 	}
+	rewritten, _ := os.ReadFile(filepath.Join(final, "artifacts.json"))
 	latest, _ := l.ArtifactsFile("gitlab", "latest")
-	if got, _ := os.ReadFile(latest); string(got) != files["artifacts.json"] {
-		t.Fatalf("latest artifacts.json = %q", got)
+	if got, _ := os.ReadFile(latest); string(got) != string(rewritten) {
+		t.Fatalf("latest artifacts.json = %q, want the rewritten %q", got, rewritten)
 	}
 	staging, _ := l.StagingDir("gitlab", "v0.1.0")
 	if _, err := os.Stat(staging); !os.IsNotExist(err) {
@@ -241,23 +277,37 @@ func TestPutRejections(t *testing.T) {
 	}
 }
 
+// drop removes name from files and from their artifacts.json.
+func drop(t *testing.T, files map[string]string, name string) {
+	delete(files, name)
+	entries := slices.DeleteFunc(releaseArtifacts(), func(e map[string]any) bool { return e["name"] == name })
+	files["artifacts.json"] = encodeArtifacts(t, entries)
+}
+
 func TestPublishChecks(t *testing.T) {
 	tests := []struct {
 		name   string
 		edit   func(files map[string]string)
 		status int
 	}{
-		{"no checksums file", func(f map[string]string) { delete(f, "tool_0.1.0_checksums.txt") }, http.StatusUnprocessableEntity},
-		{"no metadata.json", func(f map[string]string) { delete(f, "metadata.json") }, http.StatusUnprocessableEntity},
+		{"no checksums file", func(f map[string]string) { drop(t, f, "tool_0.1.0_checksums.txt") }, http.StatusUnprocessableEntity},
+		{"no metadata.json", func(f map[string]string) { drop(t, f, "metadata.json") }, http.StatusUnprocessableEntity},
 		{"no artifacts.json", func(f map[string]string) { delete(f, "artifacts.json") }, http.StatusUnprocessableEntity},
 		{"binary differs from checksums", func(f map[string]string) { f["tool_0.1.0_linux_amd64.tar.gz"] = "TAMPERED" }, http.StatusUnprocessableEntity},
 		{"binary not in checksums", func(f map[string]string) { f["extra.bin"] = "EXTRA" }, http.StatusUnprocessableEntity},
 		{"malformed checksums", func(f map[string]string) { f["tool_0.1.0_checksums.txt"] = "not a checksum line\n" }, http.StatusUnprocessableEntity},
-		{"invalid artifacts.json", func(f map[string]string) { f["artifacts.json"] = "{" }, http.StatusUnprocessableEntity},
 		{"metadata for another version", func(f map[string]string) {
 			f["metadata.json"] = `{"tag":"v0.2.0","version":"0.2.0"}`
 		}, http.StatusUnprocessableEntity},
-		{"signature needs no checksum line", func(f map[string]string) { f["tool_0.1.0_checksums.txt.sig"] = "SIG" }, http.StatusOK},
+		{"signature needs no checksum line", func(f map[string]string) {
+			f["tool_0.1.0_checksums.txt.sig"] = "SIG"
+			f["artifacts.json"] = encodeArtifacts(t, append(releaseArtifacts(),
+				map[string]any{"name": "tool_0.1.0_checksums.txt.sig", "path": "dist/tool_0.1.0_checksums.txt.sig", "type": "Signature"}))
+		}, http.StatusOK},
+		{"file in checksums but not in artifacts.json", func(f map[string]string) {
+			f["extra.bin"] = "EXTRA"
+			f["tool_0.1.0_checksums.txt"] += sha("EXTRA") + "  extra.bin\n"
+		}, http.StatusUnprocessableEntity},
 		{"version without v prefix in metadata", func(f map[string]string) { f["metadata.json"] = `{"version":"0.1.0"}` }, http.StatusOK},
 	}
 	for _, tt := range tests {

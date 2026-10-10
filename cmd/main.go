@@ -37,6 +37,7 @@ type arguments struct {
 	minFreeMB       int64
 	stagingTTL      time.Duration
 	auditLog        string
+	publicURL       string
 
 	generateToken bool   // --disable-generate-token=false
 	tokenSource   string // where a configured token comes from, for the warning
@@ -80,6 +81,7 @@ func newServer() (*localregistry.LocalRegistryServer, error) {
 		MaxStagingSize:  limit(args.maxStagingMB << 20),
 		MinFreeSpace:    limit(args.minFreeMB << 20),
 		StagingTTL:      limit(args.stagingTTL),
+		PublicURL:       args.publicURL,
 	})
 
 	// curl --request GET localhost:8077/assets/binary/vcs-gitlab-latest -o  bitlab.bin
