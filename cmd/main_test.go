@@ -2,11 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	localregistry "github.com/nivekalara237/local-registry"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	localregistry "sonarbridge-go/local-registry"
 	"testing"
 	"time"
 )
@@ -193,5 +193,14 @@ func TestLimitZeroMeansNoLimit(t *testing.T) {
 	}
 	if limit(int64(5)) != 5 || limit(time.Hour) != time.Hour {
 		t.Fatal("non-zero values must pass through")
+	}
+}
+
+func TestHealthz(t *testing.T) {
+	_, h := setup(t)
+	var body map[string]string
+	get(t, h, http.MethodGet, "/healthz", &body)
+	if body["status"] != "ok" {
+		t.Fatalf("body = %v", body)
 	}
 }
