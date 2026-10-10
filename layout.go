@@ -117,12 +117,3 @@ func (l Layout) UploadsDir() string {
 func (l Layout) UploadTmpDir() string {
 	return filepath.Join(l.root, "bin.local", ".uploads-tmp")
 }
-
-// LegacyReleaseDir is the directory POST /releases/{version} lists: assets/binaries/gitlab/<version>,
-// outside bin.local. Kept as is until that route is redesigned.
-func (l Layout) LegacyReleaseDir(version string) (string, error) {
-	if !ValidName(version) {
-		return "", fmt.Errorf("release %q: %w", version, ErrNotFound)
-	}
-	return filepath.Join(l.root, "assets", "binaries", "gitlab", version), nil
-}

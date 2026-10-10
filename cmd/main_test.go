@@ -6,11 +6,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
+	localregistry "sonarbridge-go/local-registry"
 	"testing"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 func writeFile(t *testing.T, path, content string) {
@@ -32,9 +30,9 @@ func setup(t *testing.T) (string, http.Handler) {
 	writeFile(t, filepath.Join(bins, "v0.1.0/artifacts.json"), `{"version":"v0.1.0"}`)
 	writeFile(t, filepath.Join(bins, "v0.1.0/metadata.json"), `{"project_name":"tool"}`)
 	writeFile(t, filepath.Join(bins, "v0.1.0/tool_0.1.0_checksums.txt"), "abc  tool_linux\n")
-	// /releases reads a different root: <asset-path>/assets/binaries/gitlab/<version>.
-	writeFile(t, filepath.Join(root, "assets/binaries/gitlab/v0.1.0/tool.checksum.txt"), "abc")
-	writeFile(t, filepath.Join(root, "assets/binaries/gitlab/v0.1.0/tool_linux"), "BIN")
+	// A version only in the legacy tree, which /releases also reads.
+	writeFile(t, filepath.Join(root, "assets/binaries/gitlab/v0.0.9/tool.checksum.txt"), "abc")
+	writeFile(t, filepath.Join(root, "assets/binaries/gitlab/v0.0.9/tool_linux"), "BIN")
 
 	old := args
 	args = arguments{port: 0, addr: "localhost", absAsset: root}
@@ -99,7 +97,11 @@ func TestErrorsAreJSON(t *testing.T) {
 		{http.MethodGet, "/..%2F..%2F..%2Fx/artifacts/v0.1.0", http.StatusNotFound},
 		{http.MethodGet, "/gitlab/artifacts/..%2F..", http.StatusNotFound},
 		{http.MethodGet, "/gitlab/artifacts/v0.2.0", http.StatusInternalServerError},
-		{http.MethodGet, "/artifacts/metadatas", http.StatusNotFound},
+		{http.MethodGet, "/artifacts/metadatas/gitlab", http.StatusNotFound}, // latest is not v0.1.0
+		{http.MethodGet, "/artifacts/metadatas/gitlab?version=v9.9.9", http.StatusNotFound},
+		{http.MethodGet, "/artifacts/metadatas/..%2F..?version=v0.1.0", http.StatusNotFound},
+		{http.MethodPost, "/releases/gitlab/v9.9.9", http.StatusNotFound},
+		{http.MethodPost, "/releases/gitlab/..%2F..", http.StatusNotFound},
 		{http.MethodPost, "/releases/v9.9.9", http.StatusNotFound},
 		{http.MethodPost, "/releases/..%2F..", http.StatusNotFound},
 	}
@@ -150,45 +152,30 @@ func TestAllArtifacts(t *testing.T) {
 	}
 }
 
-func TestReleases(t *testing.T) {
-	root, h := setup(t)
+// The release routes are wired; their behaviour is tested in the library (release_test.go).
+func TestReleaseRoutes(t *testing.T) {
+	_, h := setup(t)
 
-	var body ReleaseEntry
-	get(t, h, http.MethodPost, "/releases/v0.1.0", &body)
-
-	if body.TagName != "v0.1.0" || len(body.Assets) != 2 {
-		t.Fatalf("body = %+v", body)
+	var rel localregistry.Release
+	get(t, h, http.MethodPost, "/releases/gitlab/v0.1.0", &rel)
+	if rel.TagName != "v0.1.0" || len(rel.Assets) != 3 || rel.Assets[2].Name != "tool_0.1.0_checksums.txt" || !rel.Assets[2].IsChecksum {
+		t.Fatalf("published release = %+v", rel)
 	}
-	wantNames := []string{"tool.checksum.txt", "tool_linux"}
-	for i, a := range body.Assets {
-		if a.Name != wantNames[i] {
-			t.Fatalf("asset %d name = %q, want %q", i, a.Name, wantNames[i])
-		}
-		if want := "/assets/binary/assets%2Fbinaries%2Fgitlab%2Fv0.1.0%2F" + a.Name; a.Url != want {
-			t.Fatalf("asset %d url = %q, want %q", i, a.Url, want)
-		}
-		if strings.Contains(a.Url, root) {
-			t.Fatalf("asset %d url reveals the disk path: %q", i, a.Url)
-		}
-		// The url downloads the file it names.
+	get(t, h, http.MethodPost, "/releases/v0.0.9", &rel) // deprecated route, legacy tree of gitlab
+	if rel.TagName != "v0.0.9" || len(rel.Assets) != 2 {
+		t.Fatalf("legacy release = %+v", rel)
+	}
+	for _, a := range rel.Assets {
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, a.Url, nil))
-		want, _ := os.ReadFile(filepath.Join(root, "assets/binaries/gitlab/v0.1.0", a.Name))
-		if rec.Code != http.StatusOK || rec.Body.String() != string(want) {
-			t.Fatalf("GET %s: status = %d, body = %q, want %q", a.Url, rec.Code, rec.Body.String(), want)
-		}
-		if _, err := uuid.Parse(a.Id); err != nil {
-			t.Fatalf("asset %d id = %q: %v", i, a.Id, err)
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, a.URL, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: status = %d", a.URL, rec.Code)
 		}
 	}
-	if !body.Assets[0].IsChecksum || body.Assets[1].IsChecksum {
-		t.Fatalf("is_checksum = %v, %v", body.Assets[0].IsChecksum, body.Assets[1].IsChecksum)
-	}
-}
-
-func TestReleaseAssetURLEscapesNames(t *testing.T) {
-	if got := releaseAssetURL("v1", "my tool+x%.bin"); got != "/assets/binary/assets%2Fbinaries%2Fgitlab%2Fv1%2Fmy%20tool+x%25.bin" {
-		t.Fatalf("url = %q", got)
+	var meta map[string]any
+	get(t, h, http.MethodGet, "/artifacts/metadatas/gitlab?version=v0.1.0", &meta)
+	if meta["project_name"] != "tool" {
+		t.Fatalf("metadata = %v", meta)
 	}
 }
 
