@@ -1,4 +1,4 @@
-package local_registry
+package core_test
 
 import (
 	"encoding/json"
@@ -12,6 +12,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/nivekalara237/local-registry/internal/core"
+	"github.com/nivekalara237/local-registry/internal/testutil"
 )
 
 func serve(t *testing.T, h http.Handler, method, target string) *httptest.ResponseRecorder {
@@ -22,14 +25,14 @@ func serve(t *testing.T, h http.Handler, method, target string) *httptest.Respon
 }
 
 func TestAddRoutePassesPathValuesInOrder(t *testing.T) {
-	s := NewLocalRegistryServer(0, "localhost", t.TempDir())
+	s := core.NewRegistry(t.TempDir())
 	var got []string
 	s.AddRoute("/{vcs}/artifacts/{version}", "get", func(pvs ...string) any {
 		got = pvs
 		return map[string]string{"vcs": pvs[0], "version": pvs[1]}
 	})
 
-	rec := serve(t, s.Handler(), http.MethodGet, "/gitlab/artifacts/v0.1.0")
+	rec := serve(t, s.Mux, http.MethodGet, "/gitlab/artifacts/v0.1.0")
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
@@ -50,20 +53,20 @@ func TestAddRoutePassesPathValuesInOrder(t *testing.T) {
 }
 
 func TestAddRouteMethodIsEnforced(t *testing.T) {
-	s := NewLocalRegistryServer(0, "localhost", t.TempDir())
+	s := core.NewRegistry(t.TempDir())
 	s.AddRoute("/releases/{version}", "POST", func(...string) any { return nil })
 
-	if rec := serve(t, s.Handler(), http.MethodGet, "/releases/v1"); rec.Code != http.StatusMethodNotAllowed {
+	if rec := serve(t, s.Mux, http.MethodGet, "/releases/v1"); rec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d", rec.Code)
 	}
 }
 
 func TestAddRouteEErrors(t *testing.T) {
-	s := NewLocalRegistryServer(0, "localhost", t.TempDir())
+	s := core.NewRegistry(t.TempDir())
 	s.AddRouteE("/err/{kind}", "GET", func(pvs ...string) (any, error) {
 		switch pvs[0] {
 		case "notfound":
-			return nil, fmt.Errorf("x: %w", ErrNotFound)
+			return nil, fmt.Errorf("x: %w", core.ErrNotFound)
 		case "notexist":
 			return nil, fmt.Errorf("x: %w", fs.ErrNotExist)
 		default:
@@ -81,7 +84,7 @@ func TestAddRouteEErrors(t *testing.T) {
 		{"other", http.StatusInternalServerError, "internal error"},
 	}
 	for _, tt := range tests {
-		rec := serve(t, s.Handler(), http.MethodGet, "/err/"+tt.kind)
+		rec := serve(t, s.Mux, http.MethodGet, "/err/"+tt.kind)
 		if rec.Code != tt.status {
 			t.Fatalf("%s: status = %d, want %d", tt.kind, rec.Code, tt.status)
 		}
@@ -100,12 +103,12 @@ func TestAddRouteEErrors(t *testing.T) {
 
 func TestAddFileRouteHeadersAndRange(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "bin.local/assets/sub/tool.txt"), "0123456789")
-	s := NewLocalRegistryServer(0, "localhost", root)
+	testutil.WriteFile(t, filepath.Join(root, "bin.local/assets/sub/tool.txt"), "0123456789")
+	s := core.NewRegistry(root)
 	s.AddFileRoute("/assets/binary/{filePath}", "GET", "filePath")
 	target := "/assets/binary/bin.local%2Fassets%2Fsub%2Ftool.txt"
 
-	rec := serve(t, s.Handler(), http.MethodGet, target)
+	rec := serve(t, s.Mux, http.MethodGet, target)
 	if ct := rec.Header().Get("Content-Type"); ct != "application/octet-stream" {
 		t.Fatalf("Content-Type = %q", ct)
 	}
@@ -116,7 +119,7 @@ func TestAddFileRouteHeadersAndRange(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, target, nil)
 	req.Header.Set("Range", "bytes=2-4")
 	rec = httptest.NewRecorder()
-	s.Handler().ServeHTTP(rec, req)
+	s.Mux.ServeHTTP(rec, req)
 	if rec.Code != http.StatusPartialContent || rec.Body.String() != "234" {
 		t.Fatalf("range: status = %d, body = %q", rec.Code, rec.Body.String())
 	}
@@ -125,15 +128,15 @@ func TestAddFileRouteHeadersAndRange(t *testing.T) {
 func TestAddFileRouteRefusesOutsideAndMissing(t *testing.T) {
 	parent := t.TempDir()
 	root := filepath.Join(parent, "registry")
-	writeFile(t, filepath.Join(parent, "secret.txt"), "SECRET")
-	writeFile(t, filepath.Join(root, "bin.local/assets/sub/tool.bin"), "BIN")
+	testutil.WriteFile(t, filepath.Join(parent, "secret.txt"), "SECRET")
+	testutil.WriteFile(t, filepath.Join(root, "bin.local/assets/sub/tool.bin"), "BIN")
 	// Private files under the asset path itself.
-	writeFile(t, filepath.Join(root, "main.go"), "SECRET")
-	writeFile(t, filepath.Join(root, ".env"), "SECRET")
-	writeFile(t, filepath.Join(root, "bin.local/.uploads/gitlab/v1/tool.bin"), "SECRET")
-	writeFile(t, filepath.Join(root, "bin.local/.uploads-tmp/upload-1"), "SECRET")
-	writeFile(t, filepath.Join(root, "bin.local/assets/.git/config"), "SECRET")
-	writeFile(t, filepath.Join(root, "bin.local/assets/binaries/gitlab/.tmp-1"), "SECRET")
+	testutil.WriteFile(t, filepath.Join(root, "main.go"), "SECRET")
+	testutil.WriteFile(t, filepath.Join(root, ".env"), "SECRET")
+	testutil.WriteFile(t, filepath.Join(root, "bin.local/.uploads/gitlab/v1/tool.bin"), "SECRET")
+	testutil.WriteFile(t, filepath.Join(root, "bin.local/.uploads-tmp/upload-1"), "SECRET")
+	testutil.WriteFile(t, filepath.Join(root, "bin.local/assets/.git/config"), "SECRET")
+	testutil.WriteFile(t, filepath.Join(root, "bin.local/assets/binaries/gitlab/.tmp-1"), "SECRET")
 	// Symbolic links leading out of the asset path, to a file and to a directory.
 	if err := os.Symlink(filepath.Join(parent, "secret.txt"), filepath.Join(root, "bin.local/assets/link.txt")); err != nil {
 		t.Fatal(err)
@@ -141,7 +144,7 @@ func TestAddFileRouteRefusesOutsideAndMissing(t *testing.T) {
 	if err := os.Symlink(parent, filepath.Join(root, "bin.local/assets/up")); err != nil {
 		t.Fatal(err)
 	}
-	s := NewLocalRegistryServer(0, "localhost", root)
+	s := core.NewRegistry(root)
 	s.AddFileRoute("/assets/binary/{filePath}", "GET", "filePath")
 
 	for _, target := range []string{
@@ -159,7 +162,7 @@ func TestAddFileRouteRefusesOutsideAndMissing(t *testing.T) {
 		"/assets/binary/bin.local%2Fassets%2Flink.txt",
 		"/assets/binary/bin.local%2Fassets%2Fup%2Fsecret.txt",
 	} {
-		rec := serve(t, s.Handler(), http.MethodGet, target)
+		rec := serve(t, s.Mux, http.MethodGet, target)
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("%s: status = %d, want 404", target, rec.Code)
 		}
@@ -172,11 +175,11 @@ func TestAddFileRouteRefusesOutsideAndMissing(t *testing.T) {
 func TestAddFileRouteDecodesNamesOnce(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "bin.local/assets/v1")
-	writeFile(t, filepath.Join(dir, "tool+linux.bin"), "PLUS")
-	writeFile(t, filepath.Join(dir, "tool linux.bin"), "SPACE")
-	writeFile(t, filepath.Join(dir, "100%.bin"), "PERCENT")
-	writeFile(t, filepath.Join(dir, "sub/a.bin"), "SUB")
-	s := NewLocalRegistryServer(0, "localhost", root)
+	testutil.WriteFile(t, filepath.Join(dir, "tool+linux.bin"), "PLUS")
+	testutil.WriteFile(t, filepath.Join(dir, "tool linux.bin"), "SPACE")
+	testutil.WriteFile(t, filepath.Join(dir, "100%.bin"), "PERCENT")
+	testutil.WriteFile(t, filepath.Join(dir, "sub/a.bin"), "SUB")
+	s := core.NewRegistry(root)
 	s.AddFileRoute("/assets/binary/{filePath}", "GET", "filePath")
 	prefix := "/assets/binary/bin.local%2Fassets%2Fv1%2F"
 
@@ -194,7 +197,7 @@ func TestAddFileRouteDecodesNamesOnce(t *testing.T) {
 		{prefix + "tool%252Blinux.bin", http.StatusNotFound, ""}, // the old way to write "+"
 	}
 	for _, tt := range tests {
-		rec := serve(t, s.Handler(), http.MethodGet, tt.target)
+		rec := serve(t, s.Mux, http.MethodGet, tt.target)
 		if rec.Code != tt.status || (tt.status == http.StatusOK && rec.Body.String() != tt.body) {
 			t.Fatalf("%s: status = %d, body = %q; want %d %q", tt.target, rec.Code, rec.Body.String(), tt.status, tt.body)
 		}
@@ -203,13 +206,13 @@ func TestAddFileRouteDecodesNamesOnce(t *testing.T) {
 
 func TestAddFileRouteServesFile(t *testing.T) {
 	root := t.TempDir()
-	writeFile(t, filepath.Join(root, "bin.local/assets/binaries/gitlab/v1/tool.bin"), "BINARY")
-	writeFile(t, filepath.Join(root, "assets/binaries/gitlab/v1/legacy.bin"), "LEGACY")
+	testutil.WriteFile(t, filepath.Join(root, "bin.local/assets/binaries/gitlab/v1/tool.bin"), "BINARY")
+	testutil.WriteFile(t, filepath.Join(root, "assets/binaries/gitlab/v1/legacy.bin"), "LEGACY")
 	// A symbolic link that stays inside the asset path still works.
 	if err := os.Symlink("v1", filepath.Join(root, "bin.local/assets/binaries/gitlab/current")); err != nil {
 		t.Fatal(err)
 	}
-	s := NewLocalRegistryServer(0, "localhost", root)
+	s := core.NewRegistry(root)
 	s.AddFileRoute("/assets/binary/{filePath}", "GET", "filePath")
 
 	tests := []struct{ target, want string }{
@@ -220,7 +223,7 @@ func TestAddFileRouteServesFile(t *testing.T) {
 		{"/assets/binary/bin.local%2Fassets%2Fbinaries%2Fgitlab%2Fcurrent%2Ftool.bin", "BINARY"},
 	}
 	for _, tt := range tests {
-		rec := serve(t, s.Handler(), http.MethodGet, tt.target)
+		rec := serve(t, s.Mux, http.MethodGet, tt.target)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("%s: status = %d", tt.target, rec.Code)
 		}

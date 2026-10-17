@@ -7,3 +7,8 @@ asset/
 .idea/
 config.yaml
 HISTORIES.md
+SUGGEST.md
+
+deploy/kubernetes/**
+
+*.out

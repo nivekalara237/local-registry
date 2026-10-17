@@ -819,7 +819,7 @@ if err := s.ServeContext(ctx); err != nil { // nil after a clean stop
 | `ServeContext(ctx) error` | Serve until `ctx` is done, then shut down (10 s); runs the purge. |
 | `Serve()` | `ServeContext` with SIGINT/SIGTERM; exits the process with code 1 on error. |
 | `Handler() http.Handler` | Routes without logging or timeouts, for `httptest`. |
-| `NewLayout(root)` | Paths: `AssetsDir`, `BinariesDir`, `VCSDir`, `VersionDir`, `ArtifactsFile`, `StagingDir`, `UploadsDir`, `UploadTmpDir`; reads: `LatestVersion(vcs)`, `ListRelease(vcs, version, publicURL)`, `ReadMetadata(vcs, version)`. |
+| `NewLayout(root)` | Paths: `AssetsDir`, `BinariesDir`, `VCSDir`, `VersionDir`, `ArtifactsFile`, `StagingDir`, `UploadsDir`, `UploadTmpDir`, `Root`. Reads: `LatestVersion(layout, vcs)`, `ListRelease(layout, vcs, version, publicURL)`, `ReadMetadata(layout, vcs, version)`. |
 | `ValidName(s)`, `IsPublicFile(name)`, `TokenID(token)` | Name rule, file-route rule, audit token id. |
 | `Asset.FindAssetPaths(dir)`, `Asset.FindAssetContents(dir)` | Catalogue scan (`/artifacts/all`). |
 

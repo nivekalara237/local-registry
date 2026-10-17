@@ -1,4 +1,4 @@
-package local_registry
+package endpoints
 
 import (
 	"fmt"

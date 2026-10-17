@@ -1,20 +1,24 @@
-package local_registry
+package fs_test
 
 import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/nivekalara237/local-registry/internal/endpoints"
+	regfs "github.com/nivekalara237/local-registry/internal/fs"
+	"github.com/nivekalara237/local-registry/internal/testutil"
 )
 
 func putStatus(t *testing.T, h http.Handler, target, body string, chunked bool) (int, string) {
 	t.Helper()
-	rec, res := do(t, h, call{method: "PUT", target: target, body: body, token: testToken, chunked: chunked})
+	rec, res := testutil.Do(t, h, testutil.Call{Method: "PUT", Target: target, Body: body, Token: testutil.TestToken, Chunked: chunked})
 	msg, _ := res["error"].(string)
 	return rec.Code, msg
 }
 
 func TestVersionSizeQuota(t *testing.T) {
-	_, h := newUploadServer(t, UploadConfig{Token: testToken, MaxVersionSize: 10, MaxStagingSize: -1, MinFreeSpace: -1})
+	_, h := testutil.NewUploadServer(t, endpoints.UploadConfig{Token: testutil.TestToken, MaxVersionSize: 10, MaxStagingSize: -1, MinFreeSpace: -1})
 	v1 := "/gitlab/artifacts/v1/files/"
 
 	if code, _ := putStatus(t, h, v1+"a", "123456", false); code != http.StatusCreated {
@@ -24,7 +28,7 @@ func TestVersionSizeQuota(t *testing.T) {
 		t.Fatalf("over version quota: %d %q", code, msg)
 	}
 	if code, msg := putStatus(t, h, v1+"b", "123456", true); code != http.StatusRequestEntityTooLarge || !strings.Contains(msg, "staging quota") {
-		t.Fatalf("over version quota, chunked: %d %q", code, msg)
+		t.Fatalf("over version quota, Chunked: %d %q", code, msg)
 	}
 	// Replacing a file frees its old size first.
 	if code, msg := putStatus(t, h, v1+"a", "1234567890", false); code != http.StatusCreated {
@@ -37,7 +41,7 @@ func TestVersionSizeQuota(t *testing.T) {
 }
 
 func TestVersionFilesQuota(t *testing.T) {
-	_, h := newUploadServer(t, UploadConfig{Token: testToken, MaxVersionFiles: 2})
+	_, h := testutil.NewUploadServer(t, endpoints.UploadConfig{Token: testutil.TestToken, MaxVersionFiles: 2})
 	v1 := "/gitlab/artifacts/v1/files/"
 	for _, name := range []string{"a", "b"} {
 		if code, _ := putStatus(t, h, v1+name, "x", false); code != http.StatusCreated {
@@ -53,7 +57,7 @@ func TestVersionFilesQuota(t *testing.T) {
 }
 
 func TestStagingSizeQuota(t *testing.T) {
-	_, h := newUploadServer(t, UploadConfig{Token: testToken, MaxStagingSize: 10, MinFreeSpace: -1})
+	_, h := testutil.NewUploadServer(t, endpoints.UploadConfig{Token: testutil.TestToken, MaxStagingSize: 10, MinFreeSpace: -1})
 	if code, _ := putStatus(t, h, "/gitlab/artifacts/v1/files/a", "123456", false); code != http.StatusCreated {
 		t.Fatalf("first version: %d", code)
 	}
@@ -63,8 +67,8 @@ func TestStagingSizeQuota(t *testing.T) {
 }
 
 func TestFreeSpace(t *testing.T) {
-	_, h := newUploadServer(t, UploadConfig{Token: testToken, MaxFileSize: 80, MinFreeSpace: 50})
-	stubFreeSpace(t, 100, true)
+	_, h := testutil.NewUploadServer(t, endpoints.UploadConfig{Token: testutil.TestToken, MaxFileSize: 80, MinFreeSpace: 50})
+	testutil.StubFreeSpace(t, 100, true)
 	v1 := "/gitlab/artifacts/v1/files/"
 
 	if code, msg := putStatus(t, h, v1+"a", strings.Repeat("x", 60), false); code != http.StatusInsufficientStorage || !strings.Contains(msg, "free disk space") {
@@ -75,18 +79,18 @@ func TestFreeSpace(t *testing.T) {
 	}
 	// Unknown length: the server must assume the largest file it would accept (80).
 	if code, _ := putStatus(t, h, v1+"b", "x", true); code != http.StatusInsufficientStorage {
-		t.Fatalf("chunked: %d", code)
+		t.Fatalf("Chunked: %d", code)
 	}
 
-	stubFreeSpace(t, 0, false) // platform cannot tell: no check
+	testutil.StubFreeSpace(t, 0, false) // platform cannot tell: no check
 	if code, _ := putStatus(t, h, v1+"c", "x", true); code != http.StatusCreated {
 		t.Fatalf("unknown free space: %d", code)
 	}
 }
 
 func TestLimitsCanBeDisabled(t *testing.T) {
-	_, h := newUploadServer(t, UploadConfig{Token: testToken, MaxVersionSize: -1, MaxVersionFiles: -1, MaxStagingSize: -1, MinFreeSpace: -1})
-	stubFreeSpace(t, 0, true) // a full disk is ignored when the check is off
+	_, h := testutil.NewUploadServer(t, endpoints.UploadConfig{Token: testutil.TestToken, MaxVersionSize: -1, MaxVersionFiles: -1, MaxStagingSize: -1, MinFreeSpace: -1})
+	testutil.StubFreeSpace(t, 0, true) // a full disk is ignored when the check is off
 	for _, name := range []string{"a", "b", "c"} {
 		if code, msg := putStatus(t, h, "/gitlab/artifacts/v1/files/"+name, "123456", false); code != http.StatusCreated {
 			t.Fatalf("%s: %d %q", name, code, msg)
@@ -95,15 +99,15 @@ func TestLimitsCanBeDisabled(t *testing.T) {
 }
 
 func TestUploadConfigDefaults(t *testing.T) {
-	got := UploadConfig{}.withDefaults()
-	want := UploadConfig{
-		MaxFileSize: DefaultMaxFileSize, MaxVersionSize: DefaultMaxVersionSize, MaxVersionFiles: DefaultMaxVersionFiles,
-		MaxStagingSize: DefaultMaxStagingSize, MinFreeSpace: DefaultMinFreeSpace, StagingTTL: DefaultStagingTTL,
+	got := endpoints.UploadConfig{}.WithDefaults()
+	want := endpoints.UploadConfig{
+		MaxFileSize: endpoints.DefaultMaxFileSize, MaxVersionSize: regfs.DefaultMaxVersionSize, MaxVersionFiles: regfs.DefaultMaxVersionFiles,
+		MaxStagingSize: regfs.DefaultMaxStagingSize, MinFreeSpace: regfs.DefaultMinFreeSpace, StagingTTL: regfs.DefaultStagingTTL,
 	}
 	if got != want {
 		t.Fatalf("defaults = %+v", got)
 	}
-	off := UploadConfig{MaxVersionSize: -1, MaxVersionFiles: -1, MaxStagingSize: -1, MinFreeSpace: -1, StagingTTL: -1}.withDefaults()
+	off := endpoints.UploadConfig{MaxVersionSize: -1, MaxVersionFiles: -1, MaxStagingSize: -1, MinFreeSpace: -1, StagingTTL: -1}.WithDefaults()
 	if off.MaxVersionSize != -1 || off.MaxVersionFiles != -1 || off.MaxStagingSize != -1 || off.MinFreeSpace != -1 || off.StagingTTL != -1 {
 		t.Fatalf("disabled limits were changed: %+v", off)
 	}

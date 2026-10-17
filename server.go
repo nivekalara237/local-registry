@@ -11,9 +11,13 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"sync"
 	"syscall"
 	"time"
+
+	"github.com/nivekalara237/local-registry/internal/audit"
+	"github.com/nivekalara237/local-registry/internal/core"
+	"github.com/nivekalara237/local-registry/internal/endpoints"
+	regfs "github.com/nivekalara237/local-registry/internal/fs"
 )
 
 const (
@@ -24,21 +28,15 @@ const (
 )
 
 type LocalRegistryServer struct {
-	port              int
-	address           string
-	serverMux         *http.ServeMux
-	absoluteAssetPath string
-
-	// uploadMu serialises the moves into staging and the publish step, so a file
-	// can never land in a version while (or after) it is published.
-	uploadMu sync.Mutex
+	port    int
+	address string
+	// reg holds the routes, the asset tree and the audit log every route shares.
+	reg *core.Registry
 
 	// tlsConfig, when set by SetTLS, makes the server speak HTTPS only.
 	tlsConfig *tls.Config
 	// uploadCfg is set by AddUploadRoutes; ServeContext purges stale uploads with it.
 	uploadCfg *UploadConfig
-	// auditLog, when set by SetAuditLog, receives the upload routes' audit events.
-	auditLog *AuditLog
 }
 
 // SetTLS makes the server speak HTTPS only, with the PEM certificate (chain) and key in the
@@ -62,16 +60,65 @@ func (s *LocalRegistryServer) TLSEnabled() bool {
 
 func NewLocalRegistryServer(port int, addr, absoluteAssetPath string) *LocalRegistryServer {
 	return &LocalRegistryServer{
-		port:              port,
-		address:           addr,
-		serverMux:         http.NewServeMux(),
-		absoluteAssetPath: absoluteAssetPath,
+		port:    port,
+		address: addr,
+		reg:     core.NewRegistry(absoluteAssetPath),
 	}
 }
 
 // Handler returns the routes registered so far, without logging or listening.
 func (s *LocalRegistryServer) Handler() http.Handler {
-	return s.serverMux
+	return s.reg.Mux
+}
+
+// SetAuditLog sends audit events to a. Without one, they go to the standard log (slog) only.
+func (s *LocalRegistryServer) SetAuditLog(a *AuditLog) {
+	s.reg.Audit = a
+}
+
+// AddRoute registers a JSON route; f receives the path values in the order they appear in uri.
+func (s *LocalRegistryServer) AddRoute(uri, method string, f func(...string) any) {
+	s.reg.AddRoute(uri, method, f)
+}
+
+// AddRouteE is AddRoute for handlers that can fail: the error becomes a JSON
+// {"error": "..."} body: 404 for ErrNotFound and fs.ErrNotExist, an *HTTPError's own status, else 500.
+func (s *LocalRegistryServer) AddRouteE(uri, method string, f func(...string) (any, error)) {
+	s.reg.AddRouteE(uri, method, f)
+}
+
+// AddFileRoute serves the file named by the path value filename, relative to the asset path.
+// Only public files are served (see IsPublicFile); anything else, directories included, answers 404.
+// The file is opened through an os.Root, so a symbolic link cannot lead outside the asset path.
+func (s *LocalRegistryServer) AddFileRoute(uri, method, filename string) {
+	s.reg.AddFileRoute(uri, method, filename)
+}
+
+// AddUploadRoutes registers the two-step upload of a release, and the download of its files:
+//
+//	PUT  /{vcs}/artifacts/{version}/files/{name}   stream one file into staging
+//	POST /{vcs}/artifacts/{version}/publish        check the staged files and publish them at once
+//	GET  /{vcs}/artifacts/{version}/files/{name}   download a file of a published version
+//
+// artifacts.json must be uploaded last: it is refused while a file it lists is missing.
+// Publishing rewrites it so that each "path" is the file's GET URL, and keeps the uploaded
+// one as artifacts.goreleaser.json.
+// A published version is immutable: PUT and POST answer 409 once it exists.
+// Every accepted or refused request is recorded in the audit log (see SetAuditLog).
+func (s *LocalRegistryServer) AddUploadRoutes(cfg UploadConfig) {
+	cfg = endpoints.AddUploadRoutes(s.reg, cfg)
+	s.uploadCfg = &cfg
+}
+
+// AddReleaseRoutes registers the read-only release routes:
+//
+//	POST /releases/{vcs}/{version}            files of a version, with their download URL
+//	POST /releases/{version}                  deprecated: the same for vcs "gitlab"
+//	GET  /artifacts/metadatas/{vcs}?version=  metadata.json of a version (default: latest)
+//
+// publicURL, when set, makes the download URLs absolute (see UploadConfig.PublicURL).
+func (s *LocalRegistryServer) AddReleaseRoutes(publicURL string) {
+	endpoints.AddReleaseRoutes(s.reg, publicURL)
 }
 
 // statusRecorder captures the status and size of a response for the request log.
@@ -114,7 +161,7 @@ func logMiddleware(next http.Handler) http.Handler {
 			rec.status = http.StatusOK
 		}
 		client := map[string]any{}
-		clientFields(r, client)
+		audit.ClientFields(r, client)
 		attrs := []any{
 			"method", r.Method,
 			"path", r.URL.Path,
@@ -151,7 +198,7 @@ func (s *LocalRegistryServer) ServeContext(ctx context.Context) error {
 	}
 
 	server := &http.Server{
-		Handler:           logMiddleware(s.serverMux),
+		Handler:           logMiddleware(s.reg.Mux),
 		ReadHeaderTimeout: 5 * time.Second,
 		IdleTimeout:       60 * time.Second,
 		TLSConfig:         s.tlsConfig,
@@ -167,13 +214,13 @@ func (s *LocalRegistryServer) ServeContext(ctx context.Context) error {
 	fmt.Println("")
 	fmt.Printf("Listen      : %s://%s\n", scheme, ln.Addr())
 	fmt.Println("Start At    : " + time.Now().String())
-	fmt.Println("Assets Path : " + s.absoluteAssetPath)
+	fmt.Println("Assets Path : " + s.reg.Layout.Root())
 	fmt.Println()
 
 	if s.uploadCfg != nil && s.uploadCfg.StagingTTL > 0 {
 		purgeCtx, stopPurge := context.WithCancel(ctx)
 		defer stopPurge()
-		go s.runPurger(purgeCtx, s.uploadCfg.StagingTTL)
+		go regfs.RunPurger(purgeCtx, s.reg, s.uploadCfg.StagingTTL)
 	}
 
 	errc := make(chan error, 1)

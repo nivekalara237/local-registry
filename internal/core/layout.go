@@ -1,4 +1,4 @@
-package local_registry
+package core
 
 import (
 	"fmt"
@@ -53,6 +53,11 @@ type Layout struct {
 
 func NewLayout(assetPath string) Layout {
 	return Layout{root: assetPath}
+}
+
+// Root is the asset path.
+func (l Layout) Root() string {
+	return l.root
 }
 
 // AssetsDir is the tree walked by the catalogue (/artifacts/all).
