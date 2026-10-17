@@ -1,6 +1,6 @@
 //go:build unix
 
-package local_registry
+package fs
 
 import "syscall"
 

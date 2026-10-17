@@ -1,4 +1,4 @@
-package local_registry
+package fs
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/nivekalara237/local-registry/internal/core"
 )
 
 // newestModTime is the latest modification time of dir and of its direct entries.
@@ -27,13 +29,13 @@ func newestModTime(dir string) (time.Time, error) {
 	return newest, nil
 }
 
-// purgeStaleUploads removes the staged versions nobody touched for longer than ttl, and the
+// PurgeStaleUploads removes the staged versions nobody touched for longer than ttl, and the
 // temporary files an interrupted server left behind. Each removal is audited.
-func (s *LocalRegistryServer) purgeStaleUploads(ttl time.Duration, now time.Time) {
-	s.uploadMu.Lock()
-	defer s.uploadMu.Unlock()
+func PurgeStaleUploads(reg *core.Registry, ttl time.Duration, now time.Time) {
+	reg.UploadMu.Lock()
+	defer reg.UploadMu.Unlock()
 
-	l := NewLayout(s.absoluteAssetPath)
+	l := reg.Layout
 	vcsDirs, _ := os.ReadDir(l.UploadsDir())
 	for _, vcs := range vcsDirs {
 		if !vcs.IsDir() {
@@ -52,7 +54,7 @@ func (s *LocalRegistryServer) purgeStaleUploads(ttl time.Duration, now time.Time
 				slog.Error("staging purge failed", "dir", dir, "error", err)
 				continue
 			}
-			s.audit(nil, "staging_purged", map[string]any{
+			reg.Audit.Record(nil, "staging_purged", map[string]any{
 				"vcs": vcs.Name(), "version": version.Name(), "files": files, "bytes": bytes,
 				"idle": now.Sub(newest).Round(time.Second).String(),
 			})
@@ -72,13 +74,13 @@ func (s *LocalRegistryServer) purgeStaleUploads(ttl time.Duration, now time.Time
 		}
 	}
 	if removed > 0 {
-		s.audit(nil, "tmp_purged", map[string]any{"files": removed})
+		reg.Audit.Record(nil, "tmp_purged", map[string]any{"files": removed})
 	}
 }
 
-// runPurger purges at once, then every min(ttl/2, 1h), until ctx is done.
-func (s *LocalRegistryServer) runPurger(ctx context.Context, ttl time.Duration) {
-	s.purgeStaleUploads(ttl, time.Now())
+// RunPurger purges at once, then every min(ttl/2, 1h), until ctx is done.
+func RunPurger(ctx context.Context, reg *core.Registry, ttl time.Duration) {
+	PurgeStaleUploads(reg, ttl, time.Now())
 	t := time.NewTicker(min(ttl/2, time.Hour))
 	defer t.Stop()
 	for {
@@ -86,7 +88,7 @@ func (s *LocalRegistryServer) runPurger(ctx context.Context, ttl time.Duration) 
 		case <-ctx.Done():
 			return
 		case now := <-t.C:
-			s.purgeStaleUploads(ttl, now)
+			PurgeStaleUploads(reg, ttl, now)
 		}
 	}
 }

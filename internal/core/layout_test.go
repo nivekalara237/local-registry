@@ -1,4 +1,4 @@
-package local_registry
+package core
 
 import (
 	"errors"

@@ -1,4 +1,4 @@
-package local_registry
+package core
 
 import (
 	"encoding/json"
@@ -12,11 +12,31 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"sync"
+
+	"github.com/nivekalara237/local-registry/internal/audit"
 )
 
 // ErrNotFound makes an AddRouteE handler answer 404. Errors wrapping
 // fs.ErrNotExist do the same; an *HTTPError answers its own status; any other error answers 500.
 var ErrNotFound = errors.New("not found")
+
+// Registry is what every route shares: the router, the asset tree and the audit log.
+type Registry struct {
+	Mux    *http.ServeMux
+	Layout Layout
+	// Audit receives the upload routes' audit events; nil sends them to slog (see audit.AuditLog.Record).
+	// It is read at each event, so it may be set after the routes are registered.
+	Audit *audit.AuditLog
+	// UploadMu serialises the moves into staging, the publish step and the staging purge,
+	// so a file can never land in a version while (or after) it is published or purged.
+	UploadMu sync.Mutex
+}
+
+// NewRegistry returns a Registry with no route, serving the asset tree under assetPath.
+func NewRegistry(assetPath string) *Registry {
+	return &Registry{Mux: http.NewServeMux(), Layout: NewLayout(assetPath)}
+}
 
 // HTTPError is an error whose status and message are sent to the client as is.
 type HTTPError struct {
@@ -26,18 +46,20 @@ type HTTPError struct {
 
 func (e *HTTPError) Error() string { return e.Msg }
 
-func httpError(status int, format string, a ...any) error {
+// Errorf returns an *HTTPError: its status and message are sent to the client as is.
+func Errorf(status int, format string, a ...any) error {
 	return &HTTPError{Status: status, Msg: fmt.Sprintf(format, a...)}
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
+// WriteJSON answers v as JSON with status.
+func WriteJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// errorStatus is the status and client-safe message for err.
-func errorStatus(err error) (int, string) {
+// ErrorStatus is the status and client-safe message for err.
+func ErrorStatus(err error) (int, string) {
 	var he *HTTPError
 	switch {
 	case errors.As(err, &he):
@@ -48,16 +70,16 @@ func errorStatus(err error) (int, string) {
 	return http.StatusInternalServerError, "internal error"
 }
 
-// writeError answers err as {"error": "..."}. Only HTTPError messages reach the client;
+// WriteError answers err as {"error": "..."}. Only HTTPError messages reach the client;
 // other errors may hold paths and are only logged.
-func writeError(w http.ResponseWriter, req *http.Request, err error) {
-	status, msg := errorStatus(err)
+func WriteError(w http.ResponseWriter, req *http.Request, err error) {
+	status, msg := ErrorStatus(err)
 	level := slog.LevelWarn
 	if status >= 500 {
 		level = slog.LevelError
 	}
 	slog.Log(req.Context(), level, "request failed", "method", req.Method, "path", req.URL.Path, "status", status, "error", err)
-	writeJSON(w, status, map[string]string{"error": msg})
+	WriteJSON(w, status, map[string]string{"error": msg})
 }
 
 var pathVarRe = regexp.MustCompile(`\{([^}]+)\}`)
@@ -67,7 +89,7 @@ func pattern(uri, method string) string {
 }
 
 // AddRoute registers a JSON route; f receives the path values in the order they appear in uri.
-func (s *LocalRegistryServer) AddRoute(uri, method string, f func(...string) any) {
+func (s *Registry) AddRoute(uri, method string, f func(...string) any) {
 	s.AddRouteE(uri, method, func(pvs ...string) (any, error) {
 		return f(pvs...), nil
 	})
@@ -75,13 +97,13 @@ func (s *LocalRegistryServer) AddRoute(uri, method string, f func(...string) any
 
 // AddRouteE is AddRoute for handlers that can fail: the error becomes a JSON
 // {"error": "..."} body: 404 for ErrNotFound and fs.ErrNotExist, an *HTTPError's own status, else 500.
-func (s *LocalRegistryServer) AddRouteE(uri, method string, f func(...string) (any, error)) {
+func (s *Registry) AddRouteE(uri, method string, f func(...string) (any, error)) {
 	var varNames []string
 	for _, match := range pathVarRe.FindAllStringSubmatch(uri, -1) {
 		varNames = append(varNames, match[1])
 	}
 
-	s.serverMux.HandleFunc(pattern(uri, method), func(w http.ResponseWriter, req *http.Request) {
+	s.Mux.HandleFunc(pattern(uri, method), func(w http.ResponseWriter, req *http.Request) {
 		values := make([]string, len(varNames))
 		for i, name := range varNames {
 			values[i] = req.PathValue(name)
@@ -89,19 +111,19 @@ func (s *LocalRegistryServer) AddRouteE(uri, method string, f func(...string) (a
 
 		res, err := f(values...)
 		if err != nil {
-			writeError(w, req, err)
+			WriteError(w, req, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, res)
+		WriteJSON(w, http.StatusOK, res)
 	})
 }
 
 // AddFileRoute serves the file named by the path value filename, relative to the asset path.
 // Only public files are served (see IsPublicFile); anything else, directories included, answers 404.
 // The file is opened through an os.Root, so a symbolic link cannot lead outside the asset path.
-func (s *LocalRegistryServer) AddFileRoute(uri, method, filename string) {
-	s.serverMux.HandleFunc(pattern(uri, method), func(writer http.ResponseWriter, req *http.Request) {
-		root := s.absoluteAssetPath
+func (s *Registry) AddFileRoute(uri, method, filename string) {
+	s.Mux.HandleFunc(pattern(uri, method), func(writer http.ResponseWriter, req *http.Request) {
+		root := s.Layout.Root()
 		if uri == "" {
 			pwd, err := os.Getwd()
 			if err != nil {
@@ -118,14 +140,14 @@ func (s *LocalRegistryServer) AddFileRoute(uri, method, filename string) {
 			http.NotFound(writer, req)
 			return
 		}
-		serveFile(writer, req, root, name)
+		ServeFile(writer, req, root, name)
 	})
 }
 
-// serveFile sends name, a slash-separated path relative to root, as an attachment.
+// ServeFile sends name, a slash-separated path relative to root, as an attachment.
 // It is opened through an os.Root: a symbolic link cannot lead outside root.
 // A missing file, a directory or any other non-regular file answers 404.
-func serveFile(w http.ResponseWriter, req *http.Request, root, name string) {
+func ServeFile(w http.ResponseWriter, req *http.Request, root, name string) {
 	r, err := os.OpenRoot(root)
 	if err != nil {
 		http.NotFound(w, req)

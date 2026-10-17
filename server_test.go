@@ -17,10 +17,13 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/nivekalara237/local-registry/internal/testutil"
 )
 
 // freePort returns a port that was free a moment ago.
@@ -160,8 +163,8 @@ func selfSigned(t *testing.T) (certFile, keyFile string, cert *x509.Certificate)
 	}
 	dir := t.TempDir()
 	certFile, keyFile = filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
-	writeFile(t, certFile, string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})))
-	writeFile(t, keyFile, string(pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})))
+	testutil.WriteFile(t, certFile, string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})))
+	testutil.WriteFile(t, keyFile, string(pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})))
 	return certFile, keyFile, cert
 }
 
@@ -234,5 +237,33 @@ func TestSetTLSRejectsBadFiles(t *testing.T) {
 	}
 	if s.TLSEnabled() {
 		t.Fatal("TLSEnabled = true after failed SetTLS calls")
+	}
+}
+
+func TestServeContextRunsPurger(t *testing.T) {
+	root := t.TempDir()
+	s := NewLocalRegistryServer(freePort(t), "localhost", root)
+	s.AddUploadRoutes(UploadConfig{Token: testutil.TestToken, StagingTTL: time.Hour})
+	stale, _ := NewLayout(root).StagingDir("gitlab", "v1")
+	testutil.WriteFile(t, filepath.Join(stale, "a"), "x")
+	testutil.Age(t, filepath.Join(stale, "a"), 2*time.Hour)
+	testutil.Age(t, stale, 2*time.Hour)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- s.ServeContext(ctx) }()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(stale); os.IsNotExist(err) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("stale staging was not purged at startup")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }

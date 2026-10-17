@@ -1,4 +1,4 @@
-package local_registry
+package endpoints
 
 import (
 	"bytes"
@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/nivekalara237/local-registry/internal/core"
 )
 
 const (
@@ -64,7 +66,7 @@ func (a artifact) sha256() string {
 }
 
 func unprocessable(format string, a ...any) error {
-	return httpError(http.StatusUnprocessableEntity, format, a...)
+	return core.Errorf(http.StatusUnprocessableEntity, format, a...)
 }
 
 func parseArtifacts(data []byte) ([]artifact, error) {
@@ -104,7 +106,7 @@ func checkArtifacts(dir string, data []byte, sums map[string]string) ([]artifact
 			return nil, unprocessable("artifacts.json: a %s entry has no name", a.Type)
 		case seen[a.Name]:
 			return nil, unprocessable("artifacts.json lists %s twice", a.Name)
-		case !ValidName(a.Name) || a.Name == artifactsFile || a.Name == originalArtifactsFile:
+		case !core.ValidName(a.Name) || a.Name == artifactsFile || a.Name == originalArtifactsFile:
 			return nil, unprocessable("artifacts.json lists %q, a name that cannot be uploaded", a.Name)
 		}
 		seen[a.Name] = true
@@ -165,17 +167,19 @@ func releaseFilesURL(publicURL, vcs, version string) string {
 }
 
 // serveReleaseFile answers GET /{vcs}/artifacts/{version}/files/{name} with a file of a
-// published version. Staged files are not served; anything else answers 404.
-func (s *LocalRegistryServer) serveReleaseFile(w http.ResponseWriter, r *http.Request) {
-	vcs, version, name := r.PathValue("vcs"), r.PathValue("version"), r.PathValue("name")
-	if version == "latest" || !ValidName(name) || strings.HasPrefix(name, ".") {
-		http.NotFound(w, r)
-		return
+// published version of l. Staged files are not served; anything else answers 404.
+func serveReleaseFile(l core.Layout) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vcs, version, name := r.PathValue("vcs"), r.PathValue("version"), r.PathValue("name")
+		if version == "latest" || !core.ValidName(name) || strings.HasPrefix(name, ".") {
+			http.NotFound(w, r)
+			return
+		}
+		dir, err := l.VersionDir(vcs, version)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		core.ServeFile(w, r, dir, name)
 	}
-	dir, err := NewLayout(s.absoluteAssetPath).VersionDir(vcs, version)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	serveFile(w, r, dir, name)
 }

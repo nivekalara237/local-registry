@@ -1,4 +1,4 @@
-package local_registry
+package endpoints
 
 import (
 	"bufio"
@@ -16,6 +16,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nivekalara237/local-registry/internal/audit"
+	"github.com/nivekalara237/local-registry/internal/core"
+	regfs "github.com/nivekalara237/local-registry/internal/fs"
 )
 
 const (
@@ -26,7 +30,8 @@ const (
 )
 
 // UploadConfig enables the upload routes. For every limit, 0 means its Default* value and,
-// except for MaxFileSize, a negative value disables it.
+// except for MaxFileSize, a negative value disables it. The Default* values of the staging
+// limits are in internal/fs.
 type UploadConfig struct {
 	// Token is the shared secret expected as "Authorization: Bearer <token>".
 	// Empty disables uploads: the routes answer 403.
@@ -50,27 +55,43 @@ type UploadConfig struct {
 	PublicURL string
 }
 
-// withDefaults replaces zero limits by their defaults.
-func (cfg UploadConfig) withDefaults() UploadConfig {
+// WithDefaults replaces zero limits by their defaults.
+func (cfg UploadConfig) WithDefaults() UploadConfig {
 	if cfg.MaxFileSize <= 0 {
 		cfg.MaxFileSize = DefaultMaxFileSize
 	}
 	if cfg.MaxVersionSize == 0 {
-		cfg.MaxVersionSize = DefaultMaxVersionSize
+		cfg.MaxVersionSize = regfs.DefaultMaxVersionSize
 	}
 	if cfg.MaxVersionFiles == 0 {
-		cfg.MaxVersionFiles = DefaultMaxVersionFiles
+		cfg.MaxVersionFiles = regfs.DefaultMaxVersionFiles
 	}
 	if cfg.MaxStagingSize == 0 {
-		cfg.MaxStagingSize = DefaultMaxStagingSize
+		cfg.MaxStagingSize = regfs.DefaultMaxStagingSize
 	}
 	if cfg.MinFreeSpace == 0 {
-		cfg.MinFreeSpace = DefaultMinFreeSpace
+		cfg.MinFreeSpace = regfs.DefaultMinFreeSpace
 	}
 	if cfg.StagingTTL == 0 {
-		cfg.StagingTTL = DefaultStagingTTL
+		cfg.StagingTTL = regfs.DefaultStagingTTL
 	}
 	return cfg
+}
+
+// limits are the staging quotas of cfg, as the staging budget applies them.
+func (cfg UploadConfig) limits() regfs.Limits {
+	return regfs.Limits{
+		MaxFileSize:     cfg.MaxFileSize,
+		MaxVersionSize:  cfg.MaxVersionSize,
+		MaxVersionFiles: cfg.MaxVersionFiles,
+		MaxStagingSize:  cfg.MaxStagingSize,
+	}
+}
+
+// uploader serves the upload routes of one registry with one configuration.
+type uploader struct {
+	reg *core.Registry
+	cfg UploadConfig
 }
 
 // AddUploadRoutes registers the two-step upload of a release, and the download of its files:
@@ -83,67 +104,69 @@ func (cfg UploadConfig) withDefaults() UploadConfig {
 // Publishing rewrites it so that each "path" is the file's GET URL, and keeps the uploaded
 // one as artifacts.goreleaser.json.
 // A published version is immutable: PUT and POST answer 409 once it exists.
-// Every accepted or refused request is recorded in the audit log (see SetAuditLog).
-func (s *LocalRegistryServer) AddUploadRoutes(cfg UploadConfig) {
-	cfg = cfg.withDefaults()
-	s.uploadCfg = &cfg
+// Every accepted or refused request is recorded in reg.Audit.
+// It returns cfg with its defaults applied.
+func AddUploadRoutes(reg *core.Registry, cfg UploadConfig) UploadConfig {
+	cfg = cfg.WithDefaults()
+	s := &uploader{reg: reg, cfg: cfg}
 	tid := ""
 	if cfg.Token != "" {
-		tid = TokenID(cfg.Token)
+		tid = audit.TokenID(cfg.Token)
 	}
 	// refused audits and answers a request that failed after authentication.
 	refused := func(w http.ResponseWriter, r *http.Request, event string, err error) {
-		status, msg := errorStatus(err)
+		status, msg := core.ErrorStatus(err)
 		if status >= 500 {
 			msg = err.Error() // the audit log is private: keep the cause
 		}
-		s.audit(r, event, map[string]any{
+		s.reg.Audit.Record(r, event, map[string]any{
 			"vcs": r.PathValue("vcs"), "version": r.PathValue("version"), "name": r.PathValue("name"),
 			"status": status, "error": msg, "token_id": tid,
 		})
-		writeError(w, r, err)
+		core.WriteError(w, r, err)
 	}
 
-	s.serverMux.HandleFunc("PUT /{vcs}/artifacts/{version}/files/{name}", func(w http.ResponseWriter, r *http.Request) {
+	reg.Mux.HandleFunc("PUT /{vcs}/artifacts/{version}/files/{name}", func(w http.ResponseWriter, r *http.Request) {
 		if err := authorize(cfg, r); err != nil {
 			s.auditAuthFailure(r, err)
 			writeAuthError(w, r, err)
 			return
 		}
-		res, err := s.putFile(cfg, w, r)
+		res, err := s.putFile(w, r)
 		if err != nil {
 			refused(w, r, "upload_refused", err)
 			return
 		}
-		s.audit(r, "upload", map[string]any{
+		s.reg.Audit.Record(r, "upload", map[string]any{
 			"vcs": r.PathValue("vcs"), "version": r.PathValue("version"), "name": res.Name,
 			"size": res.Size, "sha256": res.Sha256, "replaced": res.replaced, "token_id": tid,
 		})
-		writeJSON(w, http.StatusCreated, res)
+		core.WriteJSON(w, http.StatusCreated, res)
 	})
-	s.serverMux.HandleFunc("POST /{vcs}/artifacts/{version}/publish", func(w http.ResponseWriter, r *http.Request) {
+	reg.Mux.HandleFunc("POST /{vcs}/artifacts/{version}/publish", func(w http.ResponseWriter, r *http.Request) {
 		if err := authorize(cfg, r); err != nil {
 			s.auditAuthFailure(r, err)
 			writeAuthError(w, r, err)
 			return
 		}
-		res, err := s.publish(cfg, w, r)
+		res, err := s.publish(w, r)
 		if err != nil {
 			refused(w, r, "publish_refused", err)
 			return
 		}
-		s.audit(r, "publish", map[string]any{
+		s.reg.Audit.Record(r, "publish", map[string]any{
 			"vcs": res.VCS, "version": res.Version, "latest": res.Latest, "files": res.records, "token_id": tid,
 		})
-		writeJSON(w, http.StatusOK, res)
+		core.WriteJSON(w, http.StatusOK, res)
 	})
-	s.serverMux.HandleFunc("GET /{vcs}/artifacts/{version}/files/{name}", s.serveReleaseFile)
+	reg.Mux.HandleFunc("GET /{vcs}/artifacts/{version}/files/{name}", serveReleaseFile(reg.Layout))
+	return cfg
 }
 
 // auditAuthFailure records a refused authentication; the token sent is never recorded.
-func (s *LocalRegistryServer) auditAuthFailure(r *http.Request, err error) {
-	status, msg := errorStatus(err)
-	s.audit(r, "auth_failed", map[string]any{
+func (s *uploader) auditAuthFailure(r *http.Request, err error) {
+	status, msg := core.ErrorStatus(err)
+	s.reg.Audit.Record(r, "auth_failed", map[string]any{
 		"method": r.Method, "path": r.URL.Path, "status": status, "error": msg,
 		"authorization_sent": r.Header.Get("Authorization") != "",
 	})
@@ -151,21 +174,21 @@ func (s *LocalRegistryServer) auditAuthFailure(r *http.Request, err error) {
 
 func authorize(cfg UploadConfig, r *http.Request) error {
 	if cfg.Token == "" {
-		return httpError(http.StatusForbidden, "upload is disabled: no token configured")
+		return core.Errorf(http.StatusForbidden, "upload is disabled: no token configured")
 	}
 	got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if !ok || subtle.ConstantTimeCompare([]byte(got), []byte(cfg.Token)) != 1 {
-		return httpError(http.StatusUnauthorized, "invalid or missing bearer token")
+		return core.Errorf(http.StatusUnauthorized, "invalid or missing bearer token")
 	}
 	return nil
 }
 
 func writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
-	var he *HTTPError
+	var he *core.HTTPError
 	if errors.As(err, &he) && he.Status == http.StatusUnauthorized {
 		w.Header().Set("WWW-Authenticate", "Bearer")
 	}
-	writeError(w, r, err)
+	core.WriteError(w, r, err)
 }
 
 // extendDeadlines lets a long upload outlive the default per-request write deadline.
@@ -177,12 +200,12 @@ func extendDeadlines(w http.ResponseWriter) {
 }
 
 // target validates vcs and version and returns the published and staging directories.
-func (s *LocalRegistryServer) target(r *http.Request) (vcs, version, final, staging string, err error) {
+func (s *uploader) target(r *http.Request) (vcs, version, final, staging string, err error) {
 	vcs, version = r.PathValue("vcs"), r.PathValue("version")
-	if !ValidName(vcs) || !ValidName(version) || version == "latest" {
-		return "", "", "", "", httpError(http.StatusBadRequest, "invalid vcs or version name")
+	if !core.ValidName(vcs) || !core.ValidName(version) || version == "latest" {
+		return "", "", "", "", core.Errorf(http.StatusBadRequest, "invalid vcs or version name")
 	}
-	l := NewLayout(s.absoluteAssetPath)
+	l := s.reg.Layout
 	if final, err = l.VersionDir(vcs, version); err != nil {
 		return "", "", "", "", err
 	}
@@ -201,7 +224,7 @@ func exists(path string) (bool, error) {
 }
 
 func errPublished(vcs, version string) error {
-	return httpError(http.StatusConflict, "version %s/%s is already published and cannot be changed", vcs, version)
+	return core.Errorf(http.StatusConflict, "version %s/%s is already published and cannot be changed", vcs, version)
 }
 
 type putResult struct {
@@ -212,17 +235,18 @@ type putResult struct {
 	replaced bool // a staged file of the same name was overwritten
 }
 
-func (s *LocalRegistryServer) putFile(cfg UploadConfig, w http.ResponseWriter, r *http.Request) (*putResult, error) {
+func (s *uploader) putFile(w http.ResponseWriter, r *http.Request) (*putResult, error) {
+	cfg := s.cfg
 	vcs, version, final, staging, err := s.target(r)
 	if err != nil {
 		return nil, err
 	}
 	name := r.PathValue("name")
-	if !ValidName(name) {
-		return nil, httpError(http.StatusBadRequest, "invalid file name: use [A-Za-z0-9._-] only")
+	if !core.ValidName(name) {
+		return nil, core.Errorf(http.StatusBadRequest, "invalid file name: use [A-Za-z0-9._-] only")
 	}
 	if name == originalArtifactsFile {
-		return nil, httpError(http.StatusBadRequest, "%s is reserved: publishing writes it", name)
+		return nil, core.Errorf(http.StatusBadRequest, "%s is reserved: publishing writes it", name)
 	}
 	if published, err := exists(final); err != nil || published {
 		if err != nil {
@@ -230,22 +254,22 @@ func (s *LocalRegistryServer) putFile(cfg UploadConfig, w http.ResponseWriter, r
 		}
 		return nil, errPublished(vcs, version)
 	}
-	b, err := s.uploadBudget(cfg, vcs, version, staging, name)
+	b, err := regfs.UploadBudget(cfg.limits(), s.reg.Layout, vcs, version, staging, name)
 	if err != nil {
 		return nil, err
 	}
-	if r.ContentLength > b.limit {
-		return nil, b.tooLarge
+	if r.ContentLength > b.Limit {
+		return nil, b.TooLarge
 	}
-	tmpDir := NewLayout(s.absoluteAssetPath).UploadTmpDir()
+	tmpDir := s.reg.Layout.UploadTmpDir()
 	if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 		return nil, err
 	}
 	need := r.ContentLength
 	if need < 0 { // chunked: assume the worst the budget allows
-		need = b.limit
+		need = b.Limit
 	}
-	if err := checkFreeSpace(cfg, tmpDir, need); err != nil {
+	if err := regfs.CheckFreeSpace(cfg.MinFreeSpace, tmpDir, need); err != nil {
 		return nil, err
 	}
 	extendDeadlines(w)
@@ -258,11 +282,11 @@ func (s *LocalRegistryServer) putFile(cfg UploadConfig, w http.ResponseWriter, r
 	defer tmp.Close()
 
 	h := sha256.New()
-	size, err := io.Copy(io.MultiWriter(tmp, h), http.MaxBytesReader(w, r.Body, b.limit))
+	size, err := io.Copy(io.MultiWriter(tmp, h), http.MaxBytesReader(w, r.Body, b.Limit))
 	if err != nil {
 		var tooLarge *http.MaxBytesError
 		if errors.As(err, &tooLarge) {
-			return nil, b.tooLarge
+			return nil, b.TooLarge
 		}
 		return nil, fmt.Errorf("reading upload body: %w", err)
 	}
@@ -274,11 +298,11 @@ func (s *LocalRegistryServer) putFile(cfg UploadConfig, w http.ResponseWriter, r
 	}
 	sum := hex.EncodeToString(h.Sum(nil))
 	if want := r.Header.Get("X-Checksum-Sha256"); want != "" && !strings.EqualFold(want, sum) {
-		return nil, httpError(http.StatusUnprocessableEntity, "sha256 mismatch: got %s, X-Checksum-Sha256 says %s", sum, want)
+		return nil, core.Errorf(http.StatusUnprocessableEntity, "sha256 mismatch: got %s, X-Checksum-Sha256 says %s", sum, want)
 	}
 
-	s.uploadMu.Lock()
-	defer s.uploadMu.Unlock()
+	s.reg.UploadMu.Lock()
+	defer s.reg.UploadMu.Unlock()
 	if published, err := exists(final); err != nil || published {
 		if err != nil {
 			return nil, err
@@ -286,11 +310,11 @@ func (s *LocalRegistryServer) putFile(cfg UploadConfig, w http.ResponseWriter, r
 		return nil, errPublished(vcs, version)
 	}
 	// Other uploads may have landed while this one streamed: check the quotas again, for good.
-	if b, err = s.uploadBudget(cfg, vcs, version, staging, name); err != nil {
+	if b, err = regfs.UploadBudget(cfg.limits(), s.reg.Layout, vcs, version, staging, name); err != nil {
 		return nil, err
 	}
-	if size > b.limit {
-		return nil, b.tooLarge
+	if size > b.Limit {
+		return nil, b.TooLarge
 	}
 	if name == artifactsFile {
 		if err := checkUploadedArtifacts(tmp.Name(), staging, size); err != nil {
@@ -345,7 +369,8 @@ func checkUploadedArtifacts(file, staging string, size int64) error {
 	return err
 }
 
-func (s *LocalRegistryServer) publish(cfg UploadConfig, w http.ResponseWriter, r *http.Request) (*publishResult, error) {
+func (s *uploader) publish(w http.ResponseWriter, r *http.Request) (*publishResult, error) {
+	cfg := s.cfg
 	vcs, version, final, staging, err := s.target(r)
 	if err != nil {
 		return nil, err
@@ -353,13 +378,13 @@ func (s *LocalRegistryServer) publish(cfg UploadConfig, w http.ResponseWriter, r
 	latest := false
 	if v := r.URL.Query().Get("latest"); v != "" {
 		if latest, err = strconv.ParseBool(v); err != nil {
-			return nil, httpError(http.StatusBadRequest, "latest must be true or false")
+			return nil, core.Errorf(http.StatusBadRequest, "latest must be true or false")
 		}
 	}
 	extendDeadlines(w) // hashing every staged file can take a while
 
-	s.uploadMu.Lock()
-	defer s.uploadMu.Unlock()
+	s.reg.UploadMu.Lock()
+	defer s.reg.UploadMu.Unlock()
 
 	if published, err := exists(final); err != nil || published {
 		if err != nil {
@@ -369,7 +394,7 @@ func (s *LocalRegistryServer) publish(cfg UploadConfig, w http.ResponseWriter, r
 	}
 	entries, err := os.ReadDir(staging)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, httpError(http.StatusNotFound, "nothing uploaded for %s/%s", vcs, version)
+		return nil, core.Errorf(http.StatusNotFound, "nothing uploaded for %s/%s", vcs, version)
 	}
 	if err != nil {
 		return nil, err
@@ -421,7 +446,7 @@ func unchecked(name string) bool {
 // It returns the sha256 of every file.
 func checkRelease(dir, version string, files []string) (map[string]string, error) {
 	invalid := func(format string, a ...any) error {
-		return httpError(http.StatusUnprocessableEntity, format, a...)
+		return core.Errorf(http.StatusUnprocessableEntity, format, a...)
 	}
 
 	var checksumsFile string

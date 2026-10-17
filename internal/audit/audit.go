@@ -1,4 +1,4 @@
-package local_registry
+package audit
 
 import (
 	"crypto/sha256"
@@ -51,19 +51,14 @@ func (a *AuditLog) write(entry map[string]any) error {
 	return a.f.Sync()
 }
 
-// SetAuditLog sends audit events to a. Without one, they go to the standard log (slog) only.
-func (s *LocalRegistryServer) SetAuditLog(a *AuditLog) {
-	s.auditLog = a
-}
-
 // TokenID identifies a token in the audit log without revealing it: the first 12 hex digits of its sha256.
 func TokenID(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:6])
 }
 
-// clientFields describes who sent r: the TCP peer, and X-Forwarded-For as sent (not trusted).
-func clientFields(r *http.Request, into map[string]any) {
+// ClientFields describes who sent r: the TCP peer, and X-Forwarded-For as sent (not trusted).
+func ClientFields(r *http.Request, into map[string]any) {
 	remote := r.RemoteAddr
 	if host, _, err := net.SplitHostPort(remote); err == nil {
 		remote = host
@@ -74,17 +69,18 @@ func clientFields(r *http.Request, into map[string]any) {
 	}
 }
 
-// audit records event with fields; r, when not nil, adds the client's address.
+// Record writes event with fields; r, when not nil, adds the client's address.
+// On a nil AuditLog, the event goes to the standard log (slog) only.
 // A failure to write the audit log is logged as an error and does not fail the request.
-func (s *LocalRegistryServer) audit(r *http.Request, event string, fields map[string]any) {
+func (a *AuditLog) Record(r *http.Request, event string, fields map[string]any) {
 	entry := map[string]any{"time": time.Now().UTC().Format(time.RFC3339Nano), "event": event}
 	for k, v := range fields {
 		entry[k] = v
 	}
 	if r != nil {
-		clientFields(r, entry)
+		ClientFields(r, entry)
 	}
-	if s.auditLog == nil {
+	if a == nil {
 		attrs := make([]any, 0, 2*len(entry))
 		for k, v := range entry {
 			if k != "time" {
@@ -94,7 +90,7 @@ func (s *LocalRegistryServer) audit(r *http.Request, event string, fields map[st
 		slog.Info("audit", attrs...)
 		return
 	}
-	if err := s.auditLog.write(entry); err != nil {
+	if err := a.write(entry); err != nil {
 		slog.Error("audit log write failed", "event", event, "error", err)
 	}
 }
