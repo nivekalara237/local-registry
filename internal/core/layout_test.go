@@ -18,7 +18,7 @@ func TestLayoutPaths(t *testing.T) {
 		got  func() (string, error)
 		want string
 	}{
-		{"vcs", func() (string, error) { return l.VCSDir("gitlab") }, bins + "/gitlab"},
+		{"product", func() (string, error) { return l.ProductDir("gitlab") }, bins + "/gitlab"},
 		{"version", func() (string, error) { return l.VersionDir("gitlab", "v0.1.0") }, bins + "/gitlab/v0.1.0"},
 		{"latest", func() (string, error) { return l.ArtifactsFile("gitlab", "latest") }, bins + "/gitlab/artifacts.json"},
 		{"no version", func() (string, error) { return l.ArtifactsFile("gitlab", "") }, bins + "/gitlab/artifacts.json"},
@@ -35,8 +35,8 @@ func TestLayoutPaths(t *testing.T) {
 func TestLayoutRejectsUnsafeNames(t *testing.T) {
 	l := NewLayout("/srv")
 	for _, bad := range []string{"", ".", "..", "../x", "a/b", `a\b`, "a b"} {
-		if _, err := l.VCSDir(bad); !errors.Is(err, ErrNotFound) {
-			t.Fatalf("VCSDir(%q) err = %v", bad, err)
+		if _, err := l.ProductDir(bad); !errors.Is(err, ErrNotFound) {
+			t.Fatalf("ProductDir(%q) err = %v", bad, err)
 		}
 		if bad != "" {
 			if _, err := l.ArtifactsFile("gitlab", bad); !errors.Is(err, ErrNotFound) {

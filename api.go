@@ -19,7 +19,7 @@ type (
 	AuditLog = audit.AuditLog
 	// UploadConfig enables the upload routes (see AddUploadRoutes).
 	UploadConfig = endpoints.UploadConfig
-	// Release lists the files of one version, as POST /releases/{vcs}/{version} answers it.
+	// Release lists the files of one version, as POST /releases/{product}/{version} answers it.
 	Release = endpoints.Release
 	// ReleaseAsset is one file of a Release.
 	ReleaseAsset = endpoints.ReleaseAsset
@@ -27,10 +27,27 @@ type (
 	Asset         = endpoints.Asset
 	AssetPath     = endpoints.AssetPath
 	AssetContents = endpoints.AssetContents
+
+	// ReleaseDocument is release.json, the description of a published version (local-registry/v1).
+	ReleaseDocument  = endpoints.ReleaseDocument
+	ReleaseArtifact  = endpoints.ReleaseArtifact
+	ReleaseChecksums = endpoints.ReleaseChecksums
+	Change           = endpoints.Change
+	// ProductIndex is index.json, a product and its versions (local-registry/v1).
+	ProductIndex   = endpoints.ProductIndex
+	IndexVersion   = endpoints.IndexVersion
+	ProductSummary = endpoints.ProductSummary
+	// ProductFile is registry.yaml, the product card written by hand (local-registry/v1).
+	ProductFile = endpoints.ProductFile
+	Owner       = endpoints.Owner
+	Link        = endpoints.Link
 )
 
 // ErrNotFound makes an AddRouteE handler answer 404.
 var ErrNotFound = core.ErrNotFound
+
+// APIVersion versions every document of the standard.
+const APIVersion = endpoints.APIVersion
 
 // Defaults applied to the zero values of UploadConfig.
 const (
@@ -58,15 +75,30 @@ func OpenAuditLog(path string) (*AuditLog, error) { return audit.OpenAuditLog(pa
 // TokenID identifies a token in the audit log without revealing it: the first 12 hex digits of its sha256.
 func TokenID(token string) string { return audit.TokenID(token) }
 
-// LatestVersion is the version that <vcs>/artifacts.json of l designates.
-func LatestVersion(l Layout, vcs string) (string, error) { return endpoints.LatestVersion(l, vcs) }
-
-// ListRelease lists the files of <vcs>/<version> ("latest" allowed) in l.
-func ListRelease(l Layout, vcs, version, publicURL string) (*Release, error) {
-	return endpoints.ListRelease(l, vcs, version, publicURL)
+// LatestVersion is the version that <product>/release.json of l designates.
+func LatestVersion(l Layout, product string) (string, error) {
+	return endpoints.LatestVersion(l, product)
 }
 
-// ReadMetadata returns the metadata.json of the published version <vcs>/<version> in l, decoded.
-func ReadMetadata(l Layout, vcs, version string) (any, error) {
-	return endpoints.ReadMetadata(l, vcs, version)
+// ListRelease lists the files of <product>/<version> ("latest" allowed) in l.
+func ListRelease(l Layout, product, version, publicURL string) (*Release, error) {
+	return endpoints.ListRelease(l, product, version, publicURL)
+}
+
+// ReadMetadata returns the metadata.json of the published version <product>/<version> in l, decoded.
+func ReadMetadata(l Layout, product, version string) (any, error) {
+	return endpoints.ReadMetadata(l, product, version)
+}
+
+// BuildIndex describes product from the disk: its versions that have a release.json, and its card.
+func BuildIndex(l Layout, product string) (*ProductIndex, error) {
+	return endpoints.BuildIndex(l, product)
+}
+
+// ListProducts summarises every product that has a version with a release.json.
+func ListProducts(l Layout) ([]ProductSummary, error) { return endpoints.ListProducts(l) }
+
+// ReadReleaseDocument returns the release.json of <product>/<version> ("latest" allowed) as is.
+func ReadReleaseDocument(l Layout, product, version string) ([]byte, error) {
+	return endpoints.ReadReleaseDocument(l, product, version)
 }

@@ -36,15 +36,15 @@ func PurgeStaleUploads(reg *core.Registry, ttl time.Duration, now time.Time) {
 	defer reg.UploadMu.Unlock()
 
 	l := reg.Layout
-	vcsDirs, _ := os.ReadDir(l.UploadsDir())
-	for _, vcs := range vcsDirs {
-		if !vcs.IsDir() {
+	productDirs, _ := os.ReadDir(l.UploadsDir())
+	for _, product := range productDirs {
+		if !product.IsDir() {
 			continue
 		}
-		vcsDir := filepath.Join(l.UploadsDir(), vcs.Name())
-		versions, _ := os.ReadDir(vcsDir)
+		productDir := filepath.Join(l.UploadsDir(), product.Name())
+		versions, _ := os.ReadDir(productDir)
 		for _, version := range versions {
-			dir := filepath.Join(vcsDir, version.Name())
+			dir := filepath.Join(productDir, version.Name())
 			newest, err := newestModTime(dir)
 			if err != nil || now.Sub(newest) <= ttl {
 				continue
@@ -55,11 +55,11 @@ func PurgeStaleUploads(reg *core.Registry, ttl time.Duration, now time.Time) {
 				continue
 			}
 			reg.Audit.Record(nil, "staging_purged", map[string]any{
-				"vcs": vcs.Name(), "version": version.Name(), "files": files, "bytes": bytes,
+				"product": product.Name(), "version": version.Name(), "files": files, "bytes": bytes,
 				"idle": now.Sub(newest).Round(time.Second).String(),
 			})
 		}
-		_ = os.Remove(vcsDir) // only succeeds once empty
+		_ = os.Remove(productDir) // only succeeds once empty
 	}
 
 	tmps, _ := os.ReadDir(l.UploadTmpDir())

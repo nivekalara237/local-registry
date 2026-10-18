@@ -29,7 +29,7 @@ func TestUploadAndPublish(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("publish: status = %d, body = %s", rec.Code, rec.Body)
 	}
-	if res["latest"] != true || res["vcs"] != "gitlab" || res["version"] != "v0.1.0" || len(res["files"].([]any)) != len(files)+1 {
+	if res["latest"] != true || res["product"] != "gitlab" || res["version"] != "v0.1.0" || len(res["files"].([]any)) != len(files)+2 {
 		t.Fatalf("publish: response = %v", res)
 	}
 
@@ -134,7 +134,7 @@ func TestPutRejections(t *testing.T) {
 		{"checksum header mismatch", testutil.Call{Method: "PUT", Target: "/gitlab/artifacts/v1/files/a", Body: "1234", Header: map[string]string{"X-Checksum-Sha256": testutil.Sha("4321")}}, http.StatusUnprocessableEntity},
 		{"traversal in name", testutil.Call{Method: "PUT", Target: "/gitlab/artifacts/v1/files/..%2Fa", Body: "1"}, http.StatusBadRequest},
 		{"space in name", testutil.Call{Method: "PUT", Target: "/gitlab/artifacts/v1/files/a%20b", Body: "1"}, http.StatusBadRequest},
-		{"traversal in vcs", testutil.Call{Method: "PUT", Target: "/..%2F..%2Fx/artifacts/v1/files/a", Body: "1"}, http.StatusBadRequest},
+		{"traversal in product", testutil.Call{Method: "PUT", Target: "/..%2F..%2Fx/artifacts/v1/files/a", Body: "1"}, http.StatusBadRequest},
 		{"latest as version", testutil.Call{Method: "PUT", Target: "/gitlab/artifacts/latest/files/a", Body: "1"}, http.StatusBadRequest},
 	}
 	for _, tt := range tests {
@@ -178,9 +178,11 @@ func TestPublishChecks(t *testing.T) {
 		edit   func(files map[string]string)
 		status int
 	}{
-		{"no checksums file", func(f map[string]string) { drop(t, f, "tool_0.1.0_checksums.txt") }, http.StatusUnprocessableEntity},
-		{"no metadata.json", func(f map[string]string) { drop(t, f, "metadata.json") }, http.StatusUnprocessableEntity},
-		{"no artifacts.json", func(f map[string]string) { delete(f, "artifacts.json") }, http.StatusUnprocessableEntity},
+		{"no registry.yaml", func(f map[string]string) { delete(f, "registry.yaml") }, http.StatusUnprocessableEntity},
+		{"no checksums file: publishing writes one", func(f map[string]string) { drop(t, f, "tool_0.1.0_checksums.txt") }, http.StatusOK},
+		{"no metadata.json", func(f map[string]string) { drop(t, f, "metadata.json") }, http.StatusOK},
+		{"no artifacts.json", func(f map[string]string) { delete(f, "artifacts.json") }, http.StatusOK},
+		{"several checksums files", func(f map[string]string) { f["other_checksums.txt"] = f["tool_0.1.0_checksums.txt"] }, http.StatusUnprocessableEntity},
 		{"binary differs from checksums", func(f map[string]string) { f["tool_0.1.0_linux_amd64.tar.gz"] = "TAMPERED" }, http.StatusUnprocessableEntity},
 		{"binary not in checksums", func(f map[string]string) { f["extra.bin"] = "EXTRA" }, http.StatusUnprocessableEntity},
 		{"malformed checksums", func(f map[string]string) { f["tool_0.1.0_checksums.txt"] = "not a checksum line\n" }, http.StatusUnprocessableEntity},

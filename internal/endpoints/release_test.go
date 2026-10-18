@@ -51,7 +51,7 @@ func TestListReleasePublished(t *testing.T) {
 			t.Fatalf("%s: tag_name = %q", version, rel.TagName)
 		}
 	}
-	want := []string{"artifacts.goreleaser.json", "artifacts.json", "metadata.json", "tool_0.1.0_checksums.txt",
+	want := []string{"artifacts.goreleaser.json", "artifacts.json", "metadata.json", "registry.yaml", "release.json", "tool_0.1.0_checksums.txt",
 		"tool_0.1.0_darwin_arm64.tar.gz", "tool_0.1.0_linux_amd64.tar.gz"}
 	if len(rel.Assets) != len(want) {
 		t.Fatalf("assets = %+v", rel.Assets)
@@ -108,7 +108,7 @@ func TestListReleasePublicURL(t *testing.T) {
 	}
 }
 
-// A version that is not published is read from the legacy tree, for any vcs.
+// A version that is not published is read from the legacy tree, for any product.
 func TestListReleaseLegacy(t *testing.T) {
 	root := t.TempDir()
 	legacy := filepath.Join(root, "assets/binaries/github/v1.0.0")
@@ -163,7 +163,7 @@ func TestDeprecatedReleaseRoute(t *testing.T) {
 		t.Fatalf("status = %d, headers = %v", rec.Code, rec.Header())
 	}
 	var rel endpoints.Release
-	if err := jsonDecode(rec.Body.Bytes(), &rel); err != nil || rel.TagName != "v0.1.0" || len(rel.Assets) != 6 {
+	if err := jsonDecode(rec.Body.Bytes(), &rel); err != nil || rel.TagName != "v0.1.0" || len(rel.Assets) != 8 {
 		t.Fatalf("release = %+v, %v", rel, err)
 	}
 }
@@ -187,13 +187,17 @@ func TestLatestVersion(t *testing.T) {
 		t.Fatalf("latest after v0.2.0 without latest = %q", v)
 	}
 
-	// Two versions with the same artifacts.json (copied by hand): ambiguous.
-	vcsDir, _ := l.VCSDir("gitlab")
-	same, _ := os.ReadFile(filepath.Join(vcsDir, "v0.1.0", "artifacts.json"))
-	testutil.WriteFile(t, filepath.Join(vcsDir, "v0.3.0", "artifacts.json"), string(same))
-	_, err := endpoints.LatestVersion(l, "gitlab")
-	if status, msg := core.ErrorStatus(err); status != http.StatusConflict || !strings.Contains(msg, "v0.1.0, v0.3.0") {
-		t.Fatalf("ambiguous: %d %q", status, msg)
+	// <product>/release.json is the mark: copied by hand, it moves latest.
+	productDir, _ := l.ProductDir("gitlab")
+	v2, _ := os.ReadFile(filepath.Join(productDir, "v0.2.0", "release.json"))
+	testutil.WriteFile(t, filepath.Join(productDir, "release.json"), string(v2))
+	if v, err := endpoints.LatestVersion(l, "gitlab"); err != nil || v != "v0.2.0" {
+		t.Fatalf("latest after a copy by hand = %q, %v", v, err)
+	}
+	// A mark naming a version that is not published designates none.
+	testutil.WriteFile(t, filepath.Join(productDir, "release.json"), `{"version":"v9.9.9"}`)
+	if _, err := endpoints.LatestVersion(l, "gitlab"); !errors.Is(err, core.ErrNotFound) {
+		t.Fatalf("latest of a missing version: err = %v", err)
 	}
 }
 

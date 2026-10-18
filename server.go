@@ -96,9 +96,9 @@ func (s *LocalRegistryServer) AddFileRoute(uri, method, filename string) {
 
 // AddUploadRoutes registers the two-step upload of a release, and the download of its files:
 //
-//	PUT  /{vcs}/artifacts/{version}/files/{name}   stream one file into staging
-//	POST /{vcs}/artifacts/{version}/publish        check the staged files and publish them at once
-//	GET  /{vcs}/artifacts/{version}/files/{name}   download a file of a published version
+//	PUT  /{product}/artifacts/{version}/files/{name}   stream one file into staging
+//	POST /{product}/artifacts/{version}/publish        check the staged files and publish them at once
+//	GET  /{product}/artifacts/{version}/files/{name}   download a file of a published version
 //
 // artifacts.json must be uploaded last: it is refused while a file it lists is missing.
 // Publishing rewrites it so that each "path" is the file's GET URL, and keeps the uploaded
@@ -112,13 +112,22 @@ func (s *LocalRegistryServer) AddUploadRoutes(cfg UploadConfig) {
 
 // AddReleaseRoutes registers the read-only release routes:
 //
-//	POST /releases/{vcs}/{version}            files of a version, with their download URL
-//	POST /releases/{version}                  deprecated: the same for vcs "gitlab"
-//	GET  /artifacts/metadatas/{vcs}?version=  metadata.json of a version (default: latest)
+//	POST /releases/{product}/{version}            files of a version, with their download URL
+//	POST /releases/{version}                  deprecated: the same for product "gitlab"
+//	GET  /artifacts/metadatas/{product}?version=  metadata.json of a version (default: latest)
 //
 // publicURL, when set, makes the download URLs absolute (see UploadConfig.PublicURL).
 func (s *LocalRegistryServer) AddReleaseRoutes(publicURL string) {
 	endpoints.AddReleaseRoutes(s.reg, publicURL)
+}
+
+// AddProductRoutes registers the read-only routes of the local-registry/v1 standard:
+//
+//	GET /products                        every product, with its latest version
+//	GET /{product}/index                 index of a product and its versions
+//	GET /{product}/releases/{version}    release.json of a version ("latest" allowed)
+func (s *LocalRegistryServer) AddProductRoutes() {
+	endpoints.AddProductRoutes(s.reg)
 }
 
 // statusRecorder captures the status and size of a response for the request log.

@@ -27,9 +27,9 @@ func serve(t *testing.T, h http.Handler, method, target string) *httptest.Respon
 func TestAddRoutePassesPathValuesInOrder(t *testing.T) {
 	s := core.NewRegistry(t.TempDir())
 	var got []string
-	s.AddRoute("/{vcs}/artifacts/{version}", "get", func(pvs ...string) any {
+	s.AddRoute("/{product}/artifacts/{version}", "get", func(pvs ...string) any {
 		got = pvs
-		return map[string]string{"vcs": pvs[0], "version": pvs[1]}
+		return map[string]string{"product": pvs[0], "version": pvs[1]}
 	})
 
 	rec := serve(t, s.Mux, http.MethodGet, "/gitlab/artifacts/v0.1.0")
@@ -47,7 +47,7 @@ func TestAddRoutePassesPathValuesInOrder(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body["vcs"] != "gitlab" || body["version"] != "v0.1.0" {
+	if body["product"] != "gitlab" || body["version"] != "v0.1.0" {
 		t.Fatalf("body = %v", body)
 	}
 }

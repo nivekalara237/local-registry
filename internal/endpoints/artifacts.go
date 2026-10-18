@@ -35,10 +35,12 @@ var publishedTypes = []string{"Archive", "File", "Source", "Linux Package", "Che
 // artifact is one artifacts.json entry: the fields it is checked on, and all of its fields
 // as sent, to write them back unchanged but for "path".
 type artifact struct {
-	Name  string `json:"name"`
-	Path  string `json:"path"`
-	Type  string `json:"type"`
-	Extra struct {
+	Name   string `json:"name"`
+	Path   string `json:"path"`
+	Type   string `json:"type"`
+	Goos   string `json:"goos"`
+	Goarch string `json:"goarch"`
+	Extra  struct {
 		Format   any `json:"Format"`
 		Checksum any `json:"Checksum"`
 	} `json:"extra"`
@@ -106,7 +108,7 @@ func checkArtifacts(dir string, data []byte, sums map[string]string) ([]artifact
 			return nil, unprocessable("artifacts.json: a %s entry has no name", a.Type)
 		case seen[a.Name]:
 			return nil, unprocessable("artifacts.json lists %s twice", a.Name)
-		case !core.ValidName(a.Name) || a.Name == artifactsFile || a.Name == originalArtifactsFile:
+		case !core.ValidName(a.Name) || reservedFile(a.Name):
 			return nil, unprocessable("artifacts.json lists %q, a name that cannot be uploaded", a.Name)
 		}
 		seen[a.Name] = true
@@ -160,22 +162,22 @@ func rewriteArtifacts(published []artifact, baseURL string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// releaseFilesURL is where GET /{vcs}/artifacts/{version}/files/{name} serves a published
+// releaseFilesURL is where GET /{product}/artifacts/{version}/files/{name} serves a published
 // version's files: an absolute URL under publicURL, or a path when publicURL is empty.
-func releaseFilesURL(publicURL, vcs, version string) string {
-	return fmt.Sprintf("%s/%s/artifacts/%s/files", strings.TrimRight(publicURL, "/"), url.PathEscape(vcs), url.PathEscape(version))
+func releaseFilesURL(publicURL, product, version string) string {
+	return fmt.Sprintf("%s/%s/artifacts/%s/files", strings.TrimRight(publicURL, "/"), url.PathEscape(product), url.PathEscape(version))
 }
 
-// serveReleaseFile answers GET /{vcs}/artifacts/{version}/files/{name} with a file of a
+// serveReleaseFile answers GET /{product}/artifacts/{version}/files/{name} with a file of a
 // published version of l. Staged files are not served; anything else answers 404.
 func serveReleaseFile(l core.Layout) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		vcs, version, name := r.PathValue("vcs"), r.PathValue("version"), r.PathValue("name")
+		product, version, name := r.PathValue("product"), r.PathValue("version"), r.PathValue("name")
 		if version == "latest" || !core.ValidName(name) || strings.HasPrefix(name, ".") {
 			http.NotFound(w, r)
 			return
 		}
-		dir, err := l.VersionDir(vcs, version)
+		dir, err := l.VersionDir(product, version)
 		if err != nil {
 			http.NotFound(w, r)
 			return

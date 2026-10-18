@@ -1,0 +1,17 @@
+apiVersion: local-registry/v1
+displayName: SonarBridge
+description: Pont entre SonarQube et les outils internes.
+license: "Apache 2.0"
+owners:
+  - name: Équipe Plateforme
+    email: platform@corp.example
+links:
+  - { name: source, url: https://git.corp.example/platform/sonarbridge }
+  - { name: docs,   url: https://docs.corp.example/sonarbridge }
+keywords: [sonar, cli]
+labels:
+  domain: qualité
+  cost-center: "4512"
+install: |                            # markdown, affiché tel quel
+  curl -fsSL https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/… | tar xz
+deprecated: false

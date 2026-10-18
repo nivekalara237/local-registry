@@ -12,3 +12,7 @@ SUGGEST.md
 deploy/kubernetes/**
 
 *.out
+
+bin/
+
+out/

@@ -64,7 +64,7 @@ type Budget struct {
 
 // UploadBudget applies the per-file, per-version and total staging quotas to the next file
 // named name in staging. A file replacing one of the same name does not count twice.
-func UploadBudget(cfg Limits, l core.Layout, vcs, version, staging, name string) (Budget, error) {
+func UploadBudget(cfg Limits, l core.Layout, product, version, staging, name string) (Budget, error) {
 	versionBytes, versionFiles, err := usage(staging)
 	if err != nil {
 		return Budget{}, err
@@ -81,14 +81,14 @@ func UploadBudget(cfg Limits, l core.Layout, vcs, version, staging, name string)
 
 	if !replacing && cfg.MaxVersionFiles > 0 && versionFiles >= cfg.MaxVersionFiles {
 		return Budget{}, core.Errorf(http.StatusUnprocessableEntity,
-			"version %s/%s already has %d staged files (limit %d)", vcs, version, versionFiles, cfg.MaxVersionFiles)
+			"version %s/%s already has %d staged files (limit %d)", product, version, versionFiles, cfg.MaxVersionFiles)
 	}
 
 	b := Budget{Limit: cfg.MaxFileSize, TooLarge: core.Errorf(http.StatusRequestEntityTooLarge, "file exceeds %d bytes", cfg.MaxFileSize)}
 	if cfg.MaxVersionSize > 0 {
 		if rest := cfg.MaxVersionSize - (versionBytes - existing); rest < b.Limit {
 			b = Budget{rest, core.Errorf(http.StatusRequestEntityTooLarge,
-				"version %s/%s would exceed its staging quota of %d bytes", vcs, version, cfg.MaxVersionSize)}
+				"version %s/%s would exceed its staging quota of %d bytes", product, version, cfg.MaxVersionSize)}
 		}
 	}
 	if cfg.MaxStagingSize > 0 {
