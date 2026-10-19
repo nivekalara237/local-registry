@@ -12,7 +12,7 @@
 
 **English** | [Français](README.fr.md)
 
-A local HTTP registry for [goreleaser](https://goreleaser.com) releases. It serves the release catalogue, the binaries and their checksums, and accepts new releases in two steps: upload the files, then publish them atomically.
+A local HTTP registry for [goreleaser](https://goreleaser.com) releases, or any versioned files. It serves the release catalogue, the binaries and their checksums, and accepts new releases in two steps: upload the files, then publish them atomically.
 
 ## Contents
 
@@ -21,6 +21,7 @@ A local HTTP registry for [goreleaser](https://goreleaser.com) releases. It serv
 - [Storage layout](#storage-layout)
 - [API conventions](#api-conventions)
 - [API reference](#api-reference)
+- [Products and the local-registry/v1 standard](#products-and-the-local-registryv1-standard)
 - [Publishing a release](#publishing-a-release)
 - [Quotas and staging purge](#quotas-and-staging-purge)
 - [Audit log](#audit-log)
@@ -277,22 +278,26 @@ Assets Path : /srv/registry
 <asset-path>/
 ├── bin.local/
 │   ├── assets/                              public, scanned by GET /artifacts/all
-│   │   └── binaries/<vcs>/
-│   │       ├── artifacts.json               copy of the latest version's artifacts.json
+│   │   └── binaries/<product>/
+│   │       ├── release.json                 copy of the latest version's release.json: the latest mark
+│   │       ├── artifacts.json               copy of the latest version's artifacts.json, when it has one
+│   │       ├── index.json                   the product and its versions (local-registry/v1)
 │   │       └── <version>/                   published version, immutable
-│   │           ├── artifacts.json           rewritten: each path is a download URL
+│   │           ├── registry.yaml            product card, required
+│   │           ├── release.json             the version (local-registry/v1)
+│   │           ├── artifacts.json           when uploaded; rewritten: each path is a download URL
 │   │           ├── artifacts.goreleaser.json   artifacts.json as uploaded
-│   │           ├── metadata.json
-│   │           ├── <project>_<version>_checksums.txt
-│   │           └── archives, binaries…
-│   ├── .uploads/<vcs>/<version>/            private: staging (uploaded, not published)
+│   │           ├── metadata.json, CHANGELOG.md   when uploaded
+│   │           ├── *checksums.txt           uploaded, or checksums.txt written by publish
+│   │           └── archives, binaries, files…
+│   ├── .uploads/<product>/<version>/        private: staging (uploaded, not published)
 │   ├── .uploads-tmp/                        private: files being received
 │   └── audit.log                            private, mode 0600
-├── assets/binaries/<vcs>/<version>/         public: legacy tree, read by POST /releases
+├── assets/binaries/<product>/<version>/     public: legacy tree, read by POST /releases
 └── anything else                            private, never served
 ```
 
-- `<vcs>` is a free name grouping the versions of one product (`github`, `gitlab`…).
+- `<product>` is what a team delivers and versions (`sonarbridge`, `db-migrations`, `github`…): a free name chosen at upload, `products` excepted. See [Products](#products-and-the-local-registryv1-standard).
 - The server reads the disk at each request (no cache): files copied by hand are visible at once.
 - The upload never writes into the legacy tree `assets/`.
 
@@ -300,7 +305,7 @@ Assets Path : /srv/registry
 
 ## API conventions
 
-**Names.** `{vcs}`, `{version}` and `{name}` must match `[A-Za-z0-9._-]+` and not be `.` or `..`. A refused name gives `404` on read routes and `400` on upload routes. `latest` is a valid read version (the latest one) but not an upload version.
+**Names.** `{product}`, `{version}` and `{name}` must match `[A-Za-z0-9._-]+` and not be `.` or `..`. A refused name gives `404` on read routes and `400` on upload routes. `latest` is a valid read version (the latest one) but not an upload version, nor are `artifacts.json`, `artifacts.goreleaser.json`, `release.json` and `index.json`.
 
 **One segment per variable.** In `/assets/binary/{filePath}`, encode `/` as `%2F`. Names are decoded once: `%252F` stays `%2F`. A literal `..` or `//` in the URL gets a `301` to the cleaned path.
 
@@ -314,9 +319,9 @@ Assets Path : /srv/registry
 | `401` | Missing or wrong token (with `WWW-Authenticate: Bearer`) |
 | `403` | Upload disabled (no token configured) |
 | `404` | Not found, or name refused on a read route |
-| `409` | Version already published; ambiguous latest |
+| `409` | Version already published |
 | `413` | File or version too large |
-| `422` | Content refused (checksums, `artifacts.json`, `metadata.json`) |
+| `422` | Content refused (`registry.yaml`, checksums, `artifacts.json`, `metadata.json`) |
 | `500` | Internal error; the cause is only in the server log |
 | `507` | Staging full or disk almost full |
 
@@ -326,25 +331,28 @@ Assets Path : /srv/registry
 
 | Method | Route | Auth | Returns |
 | --- | --- | --- | --- |
-| `GET` | [`/{vcs}/artifacts`](#get-vcsartifacts) | — | `artifacts.json` of the latest version |
-| `GET` | [`/{vcs}/artifacts/{version}`](#get-vcsartifactsversion) | — | `artifacts.json` of a version |
-| `GET` | [`/artifacts/metadatas/{vcs}`](#get-artifactsmetadatasvcs) | — | `metadata.json` of a version (default: latest) |
-| `POST` | [`/releases/{vcs}/{version}`](#post-releasesvcsversion) | — | Files of a version with their download URL |
+| `GET` | [`/{product}/artifacts`](#get-productartifacts) | — | `artifacts.json` of the latest version |
+| `GET` | [`/{product}/artifacts/{version}`](#get-productartifactsversion) | — | `artifacts.json` of a version |
+| `GET` | [`/artifacts/metadatas/{product}`](#get-artifactsmetadatasproduct) | — | `metadata.json` of a version (default: latest) |
+| `POST` | [`/releases/{product}/{version}`](#post-releasesproductversion) | — | Files of a version with their download URL |
 | `POST` | [`/releases/{version}`](#post-releasesversion-deprecated) | — | Deprecated: `/releases/gitlab/{version}` |
-| `GET` | [`/{vcs}/artifacts/{version}/files/{name}`](#get-vcsartifactsversionfilesname) | — | A file of a published version |
+| `GET` | [`/{product}/artifacts/{version}/files/{name}`](#get-productartifactsversionfilesname) | — | A file of a published version |
 | `GET` | [`/assets/binary/{filePath}`](#get-assetsbinaryfilepath) | — | A public file by path |
 | `GET` | [`/assets/checksum/{filename}`](#get-assetsbinaryfilepath) | — | Same as `/assets/binary` |
 | `GET` | [`/artifacts/all`](#get-artifactsall) | — | Raw catalogue files of every directory |
-| `PUT` | [`/{vcs}/artifacts/{version}/files/{name}`](#put-vcsartifactsversionfilesname) | token | Upload one file to staging |
-| `POST` | [`/{vcs}/artifacts/{version}/publish`](#post-vcsartifactsversionpublish) | token | Check and publish a version |
+| `GET` | [`/products`](#products-and-the-local-registryv1-standard) | — | Every product, with its latest version |
+| `GET` | [`/{product}/index`](#products-and-the-local-registryv1-standard) | — | `index.json`: a product and its versions |
+| `GET` | [`/{product}/releases/{version}`](#products-and-the-local-registryv1-standard) | — | `release.json` of a version (`latest` allowed) |
+| `PUT` | [`/{product}/artifacts/{version}/files/{name}`](#put-productartifactsversionfilesname) | token | Upload one file to staging |
+| `POST` | [`/{product}/artifacts/{version}/publish`](#post-productartifactsversionpublish) | token | Check and publish a version |
 
 ### Latest version
 
-`publish?latest=true` copies the version's `artifacts.json` to `<vcs>/artifacts.json`. Where a route needs the latest version **number**, it is the published version whose `artifacts.json` has the same bytes as that copy. None: `404`. Several (files copied by hand): `409 latest of <vcs> is ambiguous: v1, v2 have the same artifacts.json`. Versions published through the API cannot collide: their rewritten `artifacts.json` contains the version.
+`publish?latest=true` copies the version's `release.json` to `<product>/release.json`, and its `artifacts.json` to `<product>/artifacts.json` (removed when the version has none). The latest version is the `version` of `<product>/release.json`, when `<product>/<version>/release.json` exists; otherwise there is none: `404`. Versions published before `release.json` existed cannot be latest.
 
-### `GET /{vcs}/artifacts`
+### `GET /{product}/artifacts`
 
-`bin.local/assets/binaries/<vcs>/artifacts.json`: the `artifacts.json` of the latest version.
+`bin.local/assets/binaries/<product>/artifacts.json`: the `artifacts.json` of the latest version. A latest version published without `artifacts.json` gives `404`: read [`release.json`](#products-and-the-local-registryv1-standard) instead.
 
 ```sh
 curl -s http://localhost:8077/github/artifacts
@@ -358,12 +366,12 @@ The JSON is returned as stored (re-encoded, same content). For releases publishe
 
 | Status | Cause |
 | --- | --- |
-| `404` | Invalid `vcs`, or no version published with `latest=true`. |
+| `404` | Invalid `product`, no version published with `latest=true`, or a latest version without `artifacts.json`. |
 | `500` | Stored file is not valid JSON. |
 
-### `GET /{vcs}/artifacts/{version}`
+### `GET /{product}/artifacts/{version}`
 
-`bin.local/assets/binaries/<vcs>/<version>/artifacts.json`. `latest` behaves like [`GET /{vcs}/artifacts`](#get-vcsartifacts).
+`bin.local/assets/binaries/<product>/<version>/artifacts.json`. `latest` behaves like [`GET /{product}/artifacts`](#get-productartifacts).
 
 ```sh
 curl -s http://localhost:8077/github/artifacts/v1.2.3
@@ -374,13 +382,13 @@ curl -s http://localhost:8077/github/artifacts/v1.2.3
 | `404` | Invalid name, version not published (staging included), file missing. |
 | `500` | Stored file is not valid JSON. |
 
-### `GET /artifacts/metadatas/{vcs}`
+### `GET /artifacts/metadatas/{product}`
 
-`metadata.json` of a published version of `<vcs>`.
+`metadata.json` of a published version of `<product>`.
 
 | Parameter | In | Description |
 | --- | --- | --- |
-| `vcs` | path | Version group. |
+| `product` | path | Product. |
 | `version` | query | Exact version. Absent, empty or `latest`: the [latest version](#latest-version). |
 
 ```sh
@@ -395,24 +403,23 @@ curl -s "http://localhost:8077/artifacts/metadatas/github?version=v1.2.3"
 | Status | Cause |
 | --- | --- |
 | `404` | Invalid name, version not published, no `metadata.json`, or no latest version. |
-| `409` | Ambiguous [latest version](#latest-version). |
 | `500` | Stored file is not valid JSON (its content is not returned). |
 
-### `POST /releases/{vcs}/{version}`
+### `POST /releases/{product}/{version}`
 
 Lists the files of a version, each with the URL that downloads it. Read-only despite `POST`; no request body.
 
 | Parameter | In | Description |
 | --- | --- | --- |
-| `vcs` | path | Version group. |
+| `product` | path | Product. |
 | `version` | path | Exact version, or `latest` (see [Latest version](#latest-version)). |
 
 Files are read from the first directory that exists:
 
 | Order | Directory | `url` |
 | --- | --- | --- |
-| 1 | Published version `bin.local/assets/binaries/<vcs>/<version>/` | `/{vcs}/artifacts/{version}/files/{name}` |
-| 2 | Legacy tree `assets/binaries/<vcs>/<version>/` | `/assets/binary/assets%2Fbinaries%2F<vcs>%2F<version>%2F<name>` |
+| 1 | Published version `bin.local/assets/binaries/<product>/<version>/` | `/{product}/artifacts/{version}/files/{name}` |
+| 2 | Legacy tree `assets/binaries/<product>/<version>/` | `/assets/binary/assets%2Fbinaries%2F<product>%2F<version>%2F<name>` |
 
 ```sh
 curl -s -X POST http://localhost:8077/releases/github/latest
@@ -432,7 +439,7 @@ curl -s -X POST http://localhost:8077/releases/github/latest
 | --- | --- |
 | `tag_name` | The version listed (the real number for `latest`). |
 | `assets` | One entry per regular file, sorted by name; directories, symbolic links and hidden files (`.x`) are skipped. `[]` when empty. |
-| `id` | UUID v5 of `vcs/version/name`: stable across calls and restarts. |
+| `id` | UUID v5 of `product/version/name`: stable across calls and restarts. |
 | `url` | Download URL, name percent-encoded. Absolute under `--public-url` if set, else relative. |
 | `is_checksum` | Name ends with `checksums.txt` or `checksum.txt`, any case. |
 
@@ -451,13 +458,12 @@ curl -s -X POST $BASE/releases/github/latest | jq -r '.assets[] | [.name, .url] 
 | --- | --- |
 | `404` | Invalid name, version in neither tree, or no latest version. |
 | `405` | `GET` used. |
-| `409` | Ambiguous latest version. |
 
 ### `POST /releases/{version}` (deprecated)
 
 Same answer as `POST /releases/gitlab/{version}`, plus `Deprecation: true` and `Link: </releases/gitlab/{version}>; rel="successor-version"`. Will be removed.
 
-### `GET /{vcs}/artifacts/{version}/files/{name}`
+### `GET /{product}/artifacts/{version}/files/{name}`
 
 Downloads a file of a **published** version. This is the URL written in the rewritten `artifacts.json` and returned by `/releases`.
 
@@ -493,7 +499,7 @@ Scans `bin.local/assets/` and returns, for each directory holding at least one k
 
 | Field | Source |
 | --- | --- |
-| `provider` | Name of the directory (the vcs for the latest copy, **the version** for a version directory). |
+| `provider` | Name of the directory (the product for the latest copy, **the version** for a version directory). |
 | `artifacts_json` | `artifacts.json` |
 | `metadata_json` | `metadata.json` |
 | `checksums_text` | file ending in `_checksums.txt` (any case) |
@@ -516,14 +522,14 @@ Sorted by directory path. Missing or unreadable file: `""`. No known file at all
 
 Pass the token to curl on stdin so it does not appear in `ps`: `printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -H @- …`.
 
-### `PUT /{vcs}/artifacts/{version}/files/{name}`
+### `PUT /{product}/artifacts/{version}/files/{name}`
 
-Uploads one file into the staging area of `<vcs>/<version>`. Nothing is visible before [publish](#post-vcsartifactsversionpublish).
+Uploads one file into the staging area of `<product>/<version>`. Nothing is visible before [publish](#post-productartifactsversionpublish).
 
 | Parameter | In | Description |
 | --- | --- | --- |
-| `vcs`, `version` | path | `version` cannot be `latest`. |
-| `name` | path | Published file name. `artifacts.goreleaser.json` is reserved. |
+| `product`, `version` | path | `version` cannot be `latest`. |
+| `name` | path | Published file name. `artifacts.goreleaser.json`, `release.json` and `index.json` are reserved. |
 | `X-Checksum-Sha256` | header, optional | Expected sha256 (hex, any case). Mismatch: `422`, nothing kept. |
 | body | — | Raw file content (`curl -T file`). Not multipart: `curl -F` would store the envelope. |
 
@@ -544,7 +550,7 @@ Errors, in check order:
 | Status | Message |
 | --- | --- |
 | `403`, `401` | see [Upload authentication](#upload-authentication) |
-| `400` | `invalid vcs or version name`, `invalid file name: use [A-Za-z0-9._-] only`, `artifacts.goreleaser.json is reserved: publishing writes it` |
+| `400` | `invalid product or version name`, `product name products is reserved`, `version name release.json is reserved`, `invalid file name: use [A-Za-z0-9._-] only`, `artifacts.goreleaser.json is reserved: publishing writes it` |
 | `409` | `version github/v1.2.3 is already published and cannot be changed` |
 | `422` | `version github/v1.2.3 already has 100 staged files (limit 100)` (replacing a staged file is still allowed) |
 | `413` | `file exceeds 209715200 bytes`, `version github/v1.2.3 would exceed its staging quota of 2147483648 bytes` |
@@ -553,13 +559,13 @@ Errors, in check order:
 | `422` | `artifacts.json …`: see [artifacts.json checks](#artifactsjson-checks) |
 | `500` | `internal error` (disk error, client disconnected) |
 
-### `POST /{vcs}/artifacts/{version}/publish`
+### `POST /{product}/artifacts/{version}/publish`
 
-Checks the staged files as a complete goreleaser release, then makes them visible at once. No body.
+Checks the staged files, then makes them visible at once. No body. A goreleaser release (`artifacts.json`, `metadata.json`, checksums) is checked whole; without goreleaser, `registry.yaml` and the files are enough.
 
 | Parameter | In | Description |
 | --- | --- | --- |
-| `vcs`, `version` | path | `version` cannot be `latest`. |
+| `product`, `version` | path | `version` cannot be `latest`. |
 | `latest` | query | `true`: also make it the latest version. `true/false`, `1/0`, `t/f` (any case). Default `false`. |
 
 ```sh
@@ -567,35 +573,38 @@ printf 'Authorization: Bearer %s\n' "$LOCAL_REGISTRY_UPLOAD_TOKEN" |
   curl -fsS -H @- -X POST "http://localhost:8077/github/artifacts/v1.2.3/publish?latest=true"
 ```
 
-`200 OK`: `{"vcs":"github","version":"v1.2.3","files":["artifacts.goreleaser.json","artifacts.json",…],"latest":true}` (`files` sorted).
+`200 OK`: `{"product":"github","version":"v1.2.3","files":["artifacts.goreleaser.json","artifacts.json",…],"latest":true}` (`files` sorted).
 
 **Checks.** All must pass, otherwise nothing is published and staging is kept:
 
-1. Exactly one checksums file (name ends with `checksums.txt`, any case).
-2. `artifacts.json` and `metadata.json` are staged.
-3. Each line of the checksums file is `<64-hex sha256>  <name>` (`*name` accepted).
-4. Each staged file is listed in the checksums file with a matching sha256, except the checksums file, `artifacts.json`, `metadata.json`, `*.sig`, `*.pem`. Lines naming files not uploaded are allowed.
-5. `artifacts.json` passes its [checks](#artifactsjson-checks) again (catches files removed or replaced after it).
-6. Each staged file is a published entry of `artifacts.json`, except `artifacts.json` and `metadata.json`.
-7. `metadata.json` is a JSON object with `tag` or `version`, and `{version}` equals `tag`, `version`, or `v` + `version`.
+1. At most one checksums file (name ends with `checksums.txt`, any case). Optional.
+2. `registry.yaml` is staged. `artifacts.json` and `metadata.json` are optional.
+3. With a checksums file: each line is `<64-hex sha256>  <name>` (`*name` accepted).
+4. With a checksums file: each staged file is listed with a matching sha256, except the checksums file, `artifacts.json`, `metadata.json`, `registry.yaml`, `CHANGELOG.md`, `*.sig`, `*.pem`, `*.sigstore.json`. Lines naming files not uploaded are allowed.
+5. With `metadata.json`: a JSON object with `tag` or `version`, and `{version}` equals `tag`, `version`, or `v` + `version`.
+6. With `artifacts.json`: it passes its [checks](#artifactsjson-checks) again (catches files removed or replaced after it), and each staged file is a published entry of it, except `artifacts.json`, `metadata.json`, `registry.yaml` and `CHANGELOG.md`.
+7. At least one artifact: a file of `artifacts.json`, or without it, a staged file other than `registry.yaml`, `CHANGELOG.md`, `metadata.json`, the checksums file and attachments (`*.sig`, SBOMs…).
 
 **Then**, in order:
 
-1. In staging: the uploaded `artifacts.json` is copied to `artifacts.goreleaser.json` and replaced by its [rewrite](#artifactsjson-rewrite).
-2. The staging directory is renamed to `bin.local/assets/binaries/<vcs>/<version>/`: the version appears complete in one operation.
-3. With `latest=true`, the rewritten `artifacts.json` is copied atomically (temp file + rename) to `<vcs>/artifacts.json`.
+1. In staging: the uploaded `artifacts.json`, if any, is copied to `artifacts.goreleaser.json` and replaced by its [rewrite](#artifactsjson-rewrite).
+2. Without a checksums file, `checksums.txt` is computed (`<sha256>  <name>` by name, the files of check 4).
+3. `release.json` is written (see [SPEC.md](SPEC.md)), then `checksums.txt`.
+4. The staging directory is renamed to `bin.local/assets/binaries/<product>/<version>/`: the version appears complete in one operation.
+5. With `latest=true`, the version's `artifacts.json` is copied atomically (temp file + rename) to `<product>/artifacts.json`, or that file is removed when the version has none; then `release.json` to `<product>/release.json`.
+6. `<product>/index.json` is rewritten.
 
 | Status | Message |
 | --- | --- |
-| `400` | `invalid vcs or version name`, `latest must be true or false` |
+| `400` | `invalid product or version name`, `latest must be true or false` |
 | `409` | `version … is already published and cannot be changed` |
 | `404` | `nothing uploaded for github/v1.2.3` |
-| `422` | check 1: `no checksums file (*checksums.txt) uploaded`, `several checksums files: a and b` |
-| `422` | check 2: `artifacts.json not uploaded`, `metadata.json not uploaded` |
+| `422` | check 1: `several checksums files: a and b` |
+| `422` | check 2: `registry.yaml not uploaded: every version needs its product card` |
 | `422` | checks 3–4: `<file>: line 3 is not "<sha256>  <name>"`, `<name> is not listed in <checksums>`, `<name>: sha256 is <actual> but <checksums> says <expected>` |
-| `422` | check 5: see [artifacts.json checks](#artifactsjson-checks) |
-| `422` | check 6: `<name> is uploaded but artifacts.json does not list it` |
-| `422` | check 7: `metadata.json is not valid JSON`, `metadata.json has neither tag nor version`, `metadata.json describes v0.2.0 (version 0.2.0), not v1.2.3` |
+| `422` | check 5: `metadata.json is not valid JSON`, `metadata.json has neither tag nor version`, `metadata.json describes v0.2.0 (version 0.2.0), not v1.2.3` |
+| `422` | check 6: see [artifacts.json checks](#artifactsjson-checks), `<name> is uploaded but artifacts.json does not list it` |
+| `422` | check 7: `no artifact to publish: upload at least one file besides registry.yaml` |
 | `500` | `internal error`. If it happens while updating latest, the version **is** published but latest is unchanged (logged as `version published but latest not updated`). |
 
 #### artifacts.json checks
@@ -612,7 +621,7 @@ An entry is a **published file** when its `type` is `Archive`, `File`, `Source`,
 
 #### artifacts.json rewrite
 
-The published `artifacts.json` keeps only the published files, in their original order. In each entry only `path` changes: it becomes the download URL `/{vcs}/artifacts/{version}/files/{name}`, prefixed by `--public-url` when set. Other fields are kept as uploaded; keys are re-ordered alphabetically, indentation is 2 spaces.
+The published `artifacts.json` keeps only the published files, in their original order. In each entry only `path` changes: it becomes the download URL `/{product}/artifacts/{version}/files/{name}`, prefixed by `--public-url` when set. Other fields are kept as uploaded; keys are re-ordered alphabetically, indentation is 2 spaces.
 
 Uploaded entry:
 
@@ -634,16 +643,40 @@ A relative `path` resolves against the address `artifacts.json` was read from. S
 
 ---
 
+## Products and the local-registry/v1 standard
+
+Each version carries the `registry.yaml` card of its product (required), and its release notes come from an optional `CHANGELOG.md`: goreleaser's, or one in the [Keep a Changelog](https://keepachangelog.com) format. At publish, the server writes `release.json` into the version (files, platforms, sha256, SBOMs and signatures, release notes) and rewrites `<product>/index.json` (card and versions). The full format is in [SPEC.md](SPEC.md), with the JSON Schema [`schema/registry.schema.json`](schema/registry.schema.json).
+
+```yaml
+# registry.yaml, at the root of the project: sent by upload.sh
+apiVersion: local-registry/v1
+displayName: SonarBridge
+description: Bridge between SonarQube and internal tools.
+owners: [{ name: Platform team, email: platform@corp.example }]
+```
+
+```sh
+curl -s http://localhost:8077/products                         # every product
+curl -s http://localhost:8077/sonarbridge/index                # card and versions
+curl -s http://localhost:8077/sonarbridge/releases/latest      # release.json of the latest version
+```
+
+- `registry.yaml` is validated at upload (`422 registry.yaml: <reason>`) and required at publish.
+- goreleaser is optional. Without `artifacts.json`, each file's kind is inferred from its name (archive, package, file; `.sig`, `.pem`, SBOMs attached to the file they cover) and `os`/`arch` are `null`: to give them, upload an `artifacts.json`, even written by hand. Without `metadata.json`, `tag`, `commit` and `builtAt` are `null`. Without a checksums file, publish writes `checksums.txt`.
+- A version without `artifacts.json` or `metadata.json` answers `404` on the routes that serve them (`/{product}/artifacts…`, `/artifacts/metadatas/…`): read `release.json`.
+- `release.json`, `index.json` and `artifacts.goreleaser.json` are written by the server: uploading them answers `400`. The product name `products` is reserved.
+- Versions published before the standard have no `release.json`: they are not in the index, and stay available through the other routes.
+
 ## Publishing a release
 
-goreleaser runs its `publishers:` before writing `artifacts.json`, so publishing must run **after** `goreleaser release`, e.g. in the same CI step.
+goreleaser runs its `publishers:` before writing `artifacts.json`, so publishing must run **after** `goreleaser release`, e.g. in the same CI step. Without goreleaser, `upload.sh` publishes a directory of files.
 
 ### `scripts/upload.sh` (recommended)
 
-Uploads every published file of an `artifacts.json` (under its `name`, read from its `path`), `artifacts.json` last, then publishes. Works whatever the layout of the goreleaser output. Needs bash (3.2+), curl, jq.
+Uploads every published file of an `artifacts.json` (under its `name`, read from its `path`), `artifacts.json` last, then publishes. Works whatever the layout of the goreleaser output. Given a directory without `artifacts.json`, uploads every file of it instead. Needs bash (3.2+), curl, jq; `sha256sum` or `shasum` for a directory.
 
 ```
-upload.sh [--latest] [--dry-run] [--root DIR] [--version V] <vcs> [artifacts.json]
+upload.sh [--latest] [--dry-run] [--root DIR] [--version V] [--product-file F] <product> [artifacts.json | DIR]
 ```
 
 | Argument | Description |
@@ -651,13 +684,21 @@ upload.sh [--latest] [--dry-run] [--root DIR] [--version V] <vcs> [artifacts.jso
 | `--latest` | Publish with `latest=true`. |
 | `--dry-run` | Print what would be sent; send nothing; no URL or token needed. Files are still checked. |
 | `--root DIR` | Directory the `path` fields are relative to (goreleaser's working directory). Default: deduced from where `artifacts.json` sits (it strips the directory of the `Metadata` or `Checksum` entry's `path`), else the working directory. |
-| `--version V` | Version to publish. Default: `tag`, else `version`, of the listed `metadata.json`. |
-| `<vcs>` | Version group. |
-| `[artifacts.json]` | Default `dist/artifacts.json`. |
+| `--version V` | Version to publish. Default: `tag`, else `version`, of the listed `metadata.json` (of `DIR/metadata.json` for a directory). |
+| `--product-file F` | Product card sent as `registry.yaml`, required. Default: `registry.yaml` under the root (or `DIR`), else in the working directory. The `CHANGELOG.md` beside `artifacts.json` is sent too when it exists. |
+| `<product>` | Product. |
+| `[artifacts.json \| DIR]` | Default `dist/artifacts.json`. A `DIR` holding an `artifacts.json` means that file. |
 
 Environment: `LOCAL_REGISTRY_URL` (trailing `/` removed) and `LOCAL_REGISTRY_UPLOAD_TOKEN` (sent on curl's stdin).
 
-It selects published files with the [server's rule](#artifactsjson-checks), and before sending anything checks that names are unique, every file exists, and a checksums file is listed. Each file is sent with `X-Checksum-Sha256` when its entry has a `sha256:` checksum.
+It selects published files with the [server's rule](#artifactsjson-checks), and before sending anything checks that names are unique, every file exists, and a product card is found. Each file is sent with `X-Checksum-Sha256` when its entry has a `sha256:` checksum.
+
+**Directory without goreleaser.** Every regular file of `DIR` is sent with `X-Checksum-Sha256`, then the product card. `DIR` may hold no subdirectory (archive it first) and no file the server writes (`release.json`, `index.json`, `artifacts.goreleaser.json`). The server infers the kinds and writes `checksums.txt`.
+
+```sh
+tar czf out/gong-db-migrations_1.0.0.tar.gz -C migrations changelog-master.xml changes
+scripts/upload.sh --latest --version v1.0.0 --product-file migrations/registry.yaml gong-db-migrations out
+```
 
 ```
 $ scripts/upload.sh --latest github bin.local/assets/binaries/github/artifacts.json
@@ -667,7 +708,7 @@ PUT ci-bridge-vcs-github_Linux_arm64 <- /home/me/sonarbridge-go/bin.local/assets
 …
 PUT artifacts.json <- bin.local/assets/binaries/github/artifacts.json
 POST publish github/v1.2.3 (latest=true)
-{"vcs":"github","version":"v1.2.3","files":[…],"latest":true}
+{"product":"github","version":"v1.2.3","files":[…],"latest":true}
 ```
 
 Exit codes: `0` published (or dry run OK); `1` local check failed, variable missing, or server refusal (its message is printed); `2` usage error. After a failure, fix the cause and run it again: staged files are replaced.
@@ -675,10 +716,10 @@ Exit codes: `0` published (or dry run OK); `1` local check failed, variable miss
 ### `scripts/publish-to-local-registry.sh`
 
 ```
-publish-to-local-registry.sh [--latest] <vcs> [dist-dir]
+publish-to-local-registry.sh [--latest] <product> [dist-dir]
 ```
 
-Reads the version from `metadata.json`'s `tag`, uploads each file listed in the checksums file from `dist-dir` (with `X-Checksum-Sha256`), then the checksums file, `*.sig`/`*.pem`, `metadata.json`, `artifacts.json`, and publishes. Only works when every file of the checksums file sits at the root of `dist-dir` under its published name (archives); otherwise use `upload.sh`. Same environment variables. `--latest` must come first.
+Reads the version from `metadata.json`'s `tag`, uploads each file listed in the checksums file from `dist-dir` (with `X-Checksum-Sha256`), then the checksums file, `*.sig`/`*.pem`/`*.sigstore.json`, `metadata.json`, `registry.yaml` (working directory, required), `dist-dir/CHANGELOG.md` when it exists, `artifacts.json`, and publishes. goreleaser output only, and only when every file of the checksums file sits at the root of `dist-dir` under its published name (archives); otherwise use `upload.sh`. Same environment variables. `--latest` must come first.
 
 ### By hand
 
@@ -688,7 +729,7 @@ auth() { printf 'Authorization: Bearer %s\n' "$LOCAL_REGISTRY_UPLOAD_TOKEN"; }
 while read -r sum name; do
   auth | curl -fsS -H @- -H "X-Checksum-Sha256: $sum" -T "dist/$name" "$URL/github/artifacts/$V/files/$name"
 done < dist/tool_checksums.txt
-for f in tool_checksums.txt metadata.json artifacts.json; do      # artifacts.json last
+for f in tool_checksums.txt metadata.json registry.yaml artifacts.json; do   # artifacts.json last
   auth | curl -fsS -H @- -T "dist/$f" "$URL/github/artifacts/$V/files/$f"
 done
 auth | curl -fsS -H @- -X POST "$URL/github/artifacts/$V/publish?latest=true"
@@ -729,18 +770,18 @@ One JSON object per line, appended and synced to disk before the client gets the
 | `event` | When | Fields |
 | --- | --- | --- |
 | `auth_failed` | 401/403 on an upload route | `method`, `path`, `status`, `error`, `authorization_sent` |
-| `upload` | `PUT` accepted | `vcs`, `version`, `name`, `size`, `sha256`, `replaced`, `token_id` |
-| `upload_refused` | `PUT` refused after authentication | `vcs`, `version`, `name`, `status`, `error`, `token_id` |
-| `publish` | publish succeeded | `vcs`, `version`, `latest`, `files` (`{name, size, sha256}` of every published file: rewritten `artifacts.json`, uploaded `artifacts.goreleaser.json`), `token_id` |
-| `publish_refused` | publish refused after authentication | `vcs`, `version`, `status`, `error`, `token_id` |
-| `staging_purged` | staged version purged | `vcs`, `version`, `files`, `bytes`, `idle` |
+| `upload` | `PUT` accepted | `product`, `version`, `name`, `size`, `sha256`, `replaced`, `token_id` |
+| `upload_refused` | `PUT` refused after authentication | `product`, `version`, `name`, `status`, `error`, `token_id` |
+| `publish` | publish succeeded | `product`, `version`, `latest`, `files` (`{name, size, sha256}` of every published file: rewritten `artifacts.json`, uploaded `artifacts.goreleaser.json`), `token_id` |
+| `publish_refused` | publish refused after authentication | `product`, `version`, `status`, `error`, `token_id` |
+| `staging_purged` | staged version purged | `product`, `version`, `files`, `bytes`, `idle` |
 | `tmp_purged` | temporary files purged | `files` |
 
 For a `500`, `error` holds the real cause; the client only got `internal error`.
 
 ```sh
 LOG=/srv/registry/bin.local/audit.log
-jq -r 'select(.event=="publish") | "\(.time) \(.vcs)/\(.version) latest=\(.latest) from \(.remote)"' $LOG
+jq -r 'select(.event=="publish") | "\(.time) \(.product)/\(.version) latest=\(.latest) from \(.remote)"' $LOG
 jq -r 'select(.event=="auth_failed") | .remote' $LOG | sort | uniq -c | sort -rn
 ```
 
@@ -752,9 +793,9 @@ jq -r 'select(.event=="auth_failed") | .remote' $LOG | sort | uniq -c | sort -rn
 | --- | --- |
 | A file being received is never visible | Received in `.uploads-tmp/`, renamed into staging once complete and checked. |
 | A version appears complete or not at all | Publish renames the staging directory in one operation. |
-| Published files match the checksums | Every file is checked before publish. |
+| Published files match the checksums | Every file is checked before publish against the uploaded checksums file; without one, publish writes it from the staged files. |
 | `artifacts.json` paths point to the version's files | Rewritten in staging before the rename, after checking each file it lists. |
-| Latest changes in one step | New `artifacts.json` written next to the old one, then renamed over it. |
+| Latest changes in one step | New `<product>/release.json` written next to the old one, then renamed over it, after `<product>/artifacts.json`. |
 | A published version never changes | `PUT` and publish answer `409`. |
 | Parallel uploads cannot exceed a quota together | Quotas re-checked under the upload lock. |
 
@@ -767,11 +808,11 @@ Renames are atomic because `.uploads-tmp`, `.uploads` and `assets` are on the sa
 | Task | How |
 | --- | --- |
 | Fix a refused publish | Staging is kept: upload the missing or corrected file under the same name (then `artifacts.json` again if needed), call publish again, or rerun the script. |
-| Abandon an upload | Wait for the purge, or `rm -rf <asset-path>/bin.local/.uploads/<vcs>/<version>`. |
-| Change latest to an older version | `cp <vcs>/<old>/artifacts.json <vcs>/artifacts.json` under `bin.local/assets/binaries/`. |
-| Remove a published version | No API. `rm -rf bin.local/assets/binaries/<vcs>/<version>` (and fix `<vcs>/artifacts.json` if it was latest). Prefer publishing a new version. |
+| Abandon an upload | Wait for the purge, or `rm -rf <asset-path>/bin.local/.uploads/<product>/<version>`. |
+| Change latest to an older version | Under `bin.local/assets/binaries/`: `cp <product>/<old>/release.json <product>/release.json`, and `cp <product>/<old>/artifacts.json <product>/artifacts.json` (or remove it if `<old>` has none). |
+| Remove a published version | No API. `rm -rf bin.local/assets/binaries/<product>/<version>` (and fix `<product>/release.json` and `<product>/artifacts.json` if it was latest). Prefer publishing a new version. |
 | Change the token | Stop, change `LOCAL_REGISTRY_UPLOAD_TOKEN`, restart. |
-| After a crash | `upload-*` files in `bin.local/.uploads-tmp/` (purged after the TTL) and `.tmp-*` files in `bin.local/assets/binaries/<vcs>/` are ignored and can be deleted when no upload runs. |
+| After a crash | `upload-*` files in `bin.local/.uploads-tmp/` (purged after the TTL) and `.tmp-*` files in `bin.local/assets/binaries/<product>/` are ignored and can be deleted when no upload runs. |
 
 ---
 
@@ -813,13 +854,14 @@ if err := s.ServeContext(ctx); err != nil { // nil after a clean stop
 | `AddRoute(uri, method, f)` / `AddRouteE(uri, method, f)` | JSON route; `f` gets the path variables in order. `AddRouteE` errors: `*HTTPError` → its status and message; `ErrNotFound` or `fs.ErrNotExist` → `404`; other → `500 internal error`. |
 | `AddFileRoute(uri, method, varName)` | Serves the public file named by `varName`, as `/assets/binary`. |
 | `AddUploadRoutes(cfg)` | `PUT …/files/{name}`, `POST …/publish`, `GET …/files/{name}`. |
-| `AddReleaseRoutes(publicURL)` | `POST /releases/{vcs}/{version}`, `POST /releases/{version}`, `GET /artifacts/metadatas/{vcs}`. |
+| `AddReleaseRoutes(publicURL)` | `POST /releases/{product}/{version}`, `POST /releases/{version}`, `GET /artifacts/metadatas/{product}`. |
+| `AddProductRoutes()` | `GET /products`, `GET /{product}/index`, `GET /{product}/releases/{version}`. |
 | `SetTLS(cert, key) error`, `TLSEnabled() bool` | HTTPS only, TLS 1.2+. |
 | `OpenAuditLog(path)`, `SetAuditLog(a)` | Audit log; without it, events go to `slog` (message `audit`). |
 | `ServeContext(ctx) error` | Serve until `ctx` is done, then shut down (10 s); runs the purge. |
 | `Serve()` | `ServeContext` with SIGINT/SIGTERM; exits the process with code 1 on error. |
 | `Handler() http.Handler` | Routes without logging or timeouts, for `httptest`. |
-| `NewLayout(root)` | Paths: `AssetsDir`, `BinariesDir`, `VCSDir`, `VersionDir`, `ArtifactsFile`, `StagingDir`, `UploadsDir`, `UploadTmpDir`, `Root`. Reads: `LatestVersion(layout, vcs)`, `ListRelease(layout, vcs, version, publicURL)`, `ReadMetadata(layout, vcs, version)`. |
+| `NewLayout(root)` | Paths: `AssetsDir`, `BinariesDir`, `ProductDir`, `VersionDir`, `ArtifactsFile`, `StagingDir`, `UploadsDir`, `UploadTmpDir`, `Root`. Reads: `LatestVersion(layout, product)`, `ListRelease(layout, product, version, publicURL)`, `ReadMetadata(layout, product, version)`. |
 | `ValidName(s)`, `IsPublicFile(name)`, `TokenID(token)` | Name rule, file-route rule, audit token id. |
 | `Asset.FindAssetPaths(dir)`, `Asset.FindAssetContents(dir)` | Catalogue scan (`/artifacts/all`). |
 
@@ -836,7 +878,7 @@ Constants: `DefaultMaxFileSize` (200 MiB), `DefaultMaxVersionSize` (2 GiB), `Def
 - No delete route, for staging or published versions.
 - `/artifacts/all`: `provider` is the directory name (the version for a version directory); unreadable files give `""`; an empty catalogue gives `null`; only `_checksums.txt` names are recognised.
 - `POST /releases/{version}` is deprecated (gitlab only) and will be removed.
-- A `<vcs>/artifacts.json` edited by hand no longer designates any version: `latest` lookups answer `404`.
+- A `<product>/release.json` naming no published version designates none: `latest` lookups answer `404`. Versions published before `release.json` existed cannot be latest.
 - The audit log is not signed; a failed audit write does not fail the request; `X-Forwarded-For` is not verified.
 - One uploading server per `--asset-path` (in-process lock).
 
@@ -858,14 +900,16 @@ Constants: `DefaultMaxFileSize` (200 MiB), `DefaultMaxVersionSize` (2 GiB), `Def
 | `Client sent an HTTP request to an HTTPS server.` | Use `https://`. |
 | `422 artifacts.json references …, which is not uploaded` | `artifacts.json` sent before a file it lists: send that file, then `artifacts.json` again. `upload.sh` does it in order. |
 | `422 … is uploaded but artifacts.json does not list it` | Extra file in staging (earlier attempt, raw build binary): abandon the staging and resend, or use `upload.sh`. |
-| `422 … is not listed in …checksums.txt` | Uploaded file not in the checksums file: do not send it, or have goreleaser checksum it. |
+| `422 … is not listed in …checksums.txt` | Uploaded file not in the checksums file: do not send it, have goreleaser checksum it, or send no checksums file (publish writes one). |
+| `422 registry.yaml not uploaded` | Every version needs its product card: add `registry.yaml` ([Products](#products-and-the-local-registryv1-standard)), or `upload.sh --product-file`. |
+| `422 no artifact to publish` | Only `registry.yaml` (and metadata, changelog, checksums) staged: upload the files themselves. |
 | `422 … sha256 is … but … says …` | Wrong or changed file: resend the right one. |
 | `422 metadata.json describes …, not …` | URL version differs from the goreleaser tag; the scripts read it from `metadata.json`. |
 | `409 … already published` | Publish a new version, or see [Operations](#operations). |
 | `413` / `422 … staged files` / `507` | Raise the matching [quota](#quotas-and-staging-purge), or clear old staging. |
-| `404` on `/releases/<vcs>/latest` or `/artifacts/metadatas/<vcs>` | No version published with `latest=true`, or `<vcs>/artifacts.json` edited by hand. |
-| `409 latest of … is ambiguous` | Two versions have the same `artifacts.json` (hand copies): fix one, or ask for an exact version. |
-| `404` on `POST /releases/v1.2.3` | Deprecated route reads `gitlab` only: use `/releases/<vcs>/v1.2.3`. |
+| `404` on `/releases/<product>/latest` or `/artifacts/metadatas/<product>` | No version published with `latest=true`, `<product>/release.json` edited by hand, or (metadatas) a latest version without `metadata.json`. |
+| `404` on `/<product>/artifacts` | The latest version was published without `artifacts.json`: read `/<product>/releases/latest`. |
+| `404` on `POST /releases/v1.2.3` | Deprecated route reads `gitlab` only: use `/releases/<product>/v1.2.3`. |
 | `404` on `/assets/binary/…` | Path is relative to `--asset-path`, starts with `bin.local%2Fassets%2F` or `assets%2F`, every `/` as `%2F`; staging, hidden files and outside links are never served. |
 | Relative `path` in `artifacts.json` | Default. Prefix with the registry address, or set `--public-url` (affects versions published afterwards). |
 | Downloaded file starts with `--------------------------` | Uploaded with `curl -F`: resend with `curl -T`. |

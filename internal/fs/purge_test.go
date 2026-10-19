@@ -37,7 +37,7 @@ func TestPurgeStaleUploads(t *testing.T) {
 
 	for path, wantExists := range map[string]bool{
 		stale:                                   false,
-		filepath.Join(l.UploadsDir(), "gitlab"): false, // emptied vcs dir is removed
+		filepath.Join(l.UploadsDir(), "gitlab"): false, // emptied product dir is removed
 		fresh:                                   true,
 		oldTmp:                                  false,
 		newTmp:                                  true,
@@ -48,7 +48,7 @@ func TestPurgeStaleUploads(t *testing.T) {
 		}
 	}
 	events := testutil.ReadAudit(t, auditPath)
-	if len(events) != 2 || events[0]["event"] != "staging_purged" || events[0]["vcs"] != "gitlab" ||
+	if len(events) != 2 || events[0]["event"] != "staging_purged" || events[0]["product"] != "gitlab" ||
 		events[0]["version"] != "v1" || events[0]["bytes"] != float64(5) || events[0]["files"] != float64(1) ||
 		events[1]["event"] != "tmp_purged" || events[1]["files"] != float64(1) {
 		t.Fatalf("audit events = %v", events)

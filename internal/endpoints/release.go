@@ -1,9 +1,9 @@
 package endpoints
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -16,7 +16,7 @@ import (
 	"github.com/nivekalara237/local-registry/internal/core"
 )
 
-// Release lists the files of one version, as POST /releases/{vcs}/{version} answers it.
+// Release lists the files of one version, as POST /releases/{product}/{version} answers it.
 type Release struct {
 	TagName string         `json:"tag_name"`
 	Assets  []ReleaseAsset `json:"assets"`
@@ -24,7 +24,7 @@ type Release struct {
 
 // ReleaseAsset is one file of a Release.
 type ReleaseAsset struct {
-	// ID is stable: the same vcs, version and name always give the same UUID (v5).
+	// ID is stable: the same product, version and name always give the same UUID (v5).
 	ID         string `json:"id"`
 	Name       string `json:"name"`
 	URL        string `json:"url"`
@@ -42,49 +42,43 @@ func isChecksumName(name string) bool {
 	return strings.HasSuffix(n, "checksums.txt") || strings.HasSuffix(n, "checksum.txt")
 }
 
-// LatestVersion is the version that <vcs>/artifacts.json of l designates: the published version
-// whose own artifacts.json has the same bytes (publish?latest=true copies it). It answers
-// ErrNotFound when no version is latest, and 409 when several versions match.
-func LatestVersion(l core.Layout, vcs string) (string, error) {
-	latest, err := l.ArtifactsFile(vcs, "latest")
+// LatestVersion is the version that <product>/release.json of l designates (publish?latest=true
+// copies the release.json of the version there), when that version is published. It answers
+// ErrNotFound when no version is latest.
+func LatestVersion(l core.Layout, product string) (string, error) {
+	productDir, err := l.ProductDir(product)
 	if err != nil {
 		return "", err
 	}
-	want, err := os.ReadFile(latest)
+	raw, err := os.ReadFile(filepath.Join(productDir, releaseFile))
 	if errors.Is(err, os.ErrNotExist) {
 		return "", core.ErrNotFound
 	}
 	if err != nil {
 		return "", err
 	}
-	vcsDir, _ := l.VCSDir(vcs)
-	entries, err := os.ReadDir(vcsDir)
-	if err != nil {
+	var doc struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return "", fmt.Errorf("%s/%s: %w", product, releaseFile, err)
+	}
+	if !core.ValidName(doc.Version) || reservedFile(doc.Version) {
+		return "", core.ErrNotFound
+	}
+	if _, err := os.Stat(filepath.Join(productDir, doc.Version, releaseFile)); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", core.ErrNotFound
+		}
 		return "", err
 	}
-	var found []string
-	for _, e := range entries {
-		if !e.IsDir() || !core.ValidName(e.Name()) || strings.HasPrefix(e.Name(), ".") {
-			continue
-		}
-		got, err := os.ReadFile(filepath.Join(vcsDir, e.Name(), artifactsFile))
-		if err == nil && bytes.Equal(got, want) {
-			found = append(found, e.Name())
-		}
-	}
-	switch len(found) {
-	case 0:
-		return "", core.ErrNotFound
-	case 1:
-		return found[0], nil
-	}
-	return "", core.Errorf(http.StatusConflict, "latest of %s is ambiguous: %s have the same artifacts.json", vcs, strings.Join(found, ", "))
+	return doc.Version, nil
 }
 
-// resolveVersion turns "latest" (or "") into the latest published version of vcs.
-func resolveVersion(l core.Layout, vcs, version string) (string, error) {
+// resolveVersion turns "latest" (or "") into the latest published version of product.
+func resolveVersion(l core.Layout, product, version string) (string, error) {
 	if version == "" || version == "latest" {
-		return LatestVersion(l, vcs)
+		return LatestVersion(l, product)
 	}
 	if !core.ValidName(version) {
 		return "", core.ErrNotFound
@@ -92,30 +86,30 @@ func resolveVersion(l core.Layout, vcs, version string) (string, error) {
 	return version, nil
 }
 
-// ListRelease lists the files of <vcs>/<version> in l ("latest" allowed). It reads the published
-// version (bin.local/assets/binaries/<vcs>/<version>), whose files download through
-// GET /{vcs}/artifacts/{version}/files/{name}; failing that, the legacy tree
-// (assets/binaries/<vcs>/<version>), whose files download through GET /assets/binary.
+// ListRelease lists the files of <product>/<version> in l ("latest" allowed). It reads the published
+// version (bin.local/assets/binaries/<product>/<version>), whose files download through
+// GET /{product}/artifacts/{version}/files/{name}; failing that, the legacy tree
+// (assets/binaries/<product>/<version>), whose files download through GET /assets/binary.
 // URLs are relative, or absolute under publicURL when it is set.
 // Only regular files are listed, hidden ones (".x") excepted, sorted by name.
-func ListRelease(l core.Layout, vcs, version, publicURL string) (*Release, error) {
-	if !core.ValidName(vcs) {
+func ListRelease(l core.Layout, product, version, publicURL string) (*Release, error) {
+	if !core.ValidName(product) {
 		return nil, core.ErrNotFound
 	}
-	version, err := resolveVersion(l, vcs, version)
+	version, err := resolveVersion(l, product, version)
 	if err != nil {
 		return nil, err
 	}
 	base := strings.TrimRight(publicURL, "/")
 
-	dir, _ := l.VersionDir(vcs, version)
+	dir, _ := l.VersionDir(product, version)
 	fileURL := func(name string) string {
-		return releaseFilesURL(publicURL, vcs, version) + "/" + url.PathEscape(name)
+		return releaseFilesURL(publicURL, product, version) + "/" + url.PathEscape(name)
 	}
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-		dir = filepath.Join(l.Root(), "assets", "binaries", vcs, version)
+		dir = filepath.Join(l.Root(), "assets", "binaries", product, version)
 		fileURL = func(name string) string {
-			return base + "/assets/binary/" + url.PathEscape(path.Join("assets", "binaries", vcs, version, name))
+			return base + "/assets/binary/" + url.PathEscape(path.Join("assets", "binaries", product, version, name))
 		}
 	}
 	entries, err := os.ReadDir(dir)
@@ -128,7 +122,7 @@ func ListRelease(l core.Layout, vcs, version, publicURL string) (*Release, error
 			continue
 		}
 		rel.Assets = append(rel.Assets, ReleaseAsset{
-			ID:         uuid.NewSHA1(assetNamespace, []byte(vcs+"/"+version+"/"+e.Name())).String(),
+			ID:         uuid.NewSHA1(assetNamespace, []byte(product+"/"+version+"/"+e.Name())).String(),
 			Name:       e.Name(),
 			URL:        fileURL(e.Name()),
 			IsChecksum: isChecksumName(e.Name()),
@@ -137,21 +131,21 @@ func ListRelease(l core.Layout, vcs, version, publicURL string) (*Release, error
 	return rel, nil
 }
 
-// ReadMetadata returns the metadata.json of the published version <vcs>/<version> in l
+// ReadMetadata returns the metadata.json of the published version <product>/<version> in l
 // ("latest" or "" for the latest one), decoded.
-func ReadMetadata(l core.Layout, vcs, version string) (any, error) {
-	if !core.ValidName(vcs) {
+func ReadMetadata(l core.Layout, product, version string) (any, error) {
+	if !core.ValidName(product) {
 		return nil, core.ErrNotFound
 	}
-	version, err := resolveVersion(l, vcs, version)
+	version, err := resolveVersion(l, product, version)
 	if err != nil {
 		return nil, err
 	}
-	dir, err := l.VersionDir(vcs, version)
+	dir, err := l.VersionDir(product, version)
 	if err != nil {
 		return nil, err
 	}
-	raw, err := os.ReadFile(filepath.Join(dir, "metadata.json"))
+	raw, err := os.ReadFile(filepath.Join(dir, metadataFile))
 	if err != nil {
 		return nil, err
 	}
@@ -164,14 +158,14 @@ func ReadMetadata(l core.Layout, vcs, version string) (any, error) {
 
 // AddReleaseRoutes registers the read-only release routes on reg:
 //
-//	POST /releases/{vcs}/{version}            files of a version, with their download URL
-//	POST /releases/{version}                  deprecated: the same for vcs "gitlab"
-//	GET  /artifacts/metadatas/{vcs}?version=  metadata.json of a version (default: latest)
+//	POST /releases/{product}/{version}            files of a version, with their download URL
+//	POST /releases/{version}                  deprecated: the same for product "gitlab"
+//	GET  /artifacts/metadatas/{product}?version=  metadata.json of a version (default: latest)
 //
 // publicURL, when set, makes the download URLs absolute (see UploadConfig.PublicURL).
 func AddReleaseRoutes(reg *core.Registry, publicURL string) {
 	l := reg.Layout
-	reg.AddRouteE("/releases/{vcs}/{version}", "POST", func(pvs ...string) (any, error) {
+	reg.AddRouteE("/releases/{product}/{version}", "POST", func(pvs ...string) (any, error) {
 		return ListRelease(l, pvs[0], pvs[1], publicURL)
 	})
 	reg.Mux.HandleFunc("POST /releases/{version}", func(w http.ResponseWriter, r *http.Request) {
@@ -184,8 +178,8 @@ func AddReleaseRoutes(reg *core.Registry, publicURL string) {
 		}
 		core.WriteJSON(w, http.StatusOK, rel)
 	})
-	reg.Mux.HandleFunc("GET /artifacts/metadatas/{vcs}", func(w http.ResponseWriter, r *http.Request) {
-		meta, err := ReadMetadata(l, r.PathValue("vcs"), r.URL.Query().Get("version"))
+	reg.Mux.HandleFunc("GET /artifacts/metadatas/{product}", func(w http.ResponseWriter, r *http.Request) {
+		meta, err := ReadMetadata(l, r.PathValue("product"), r.URL.Query().Get("version"))
 		if err != nil {
 			core.WriteError(w, r, err)
 			return

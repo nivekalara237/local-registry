@@ -130,7 +130,7 @@ func TestAuditTrail(t *testing.T) {
 		t.Fatalf("publish = %v", pub)
 	}
 	files := pub[0]["files"].([]any)
-	if len(files) != len(testutil.Release())+1 { // + artifacts.goreleaser.json
+	if len(files) != len(testutil.Release())+2 { // + artifacts.goreleaser.json, release.json
 		t.Fatalf("publish files = %v", files)
 	}
 	final, _ := core.NewLayout(root).VersionDir("gitlab", "v0.1.0")

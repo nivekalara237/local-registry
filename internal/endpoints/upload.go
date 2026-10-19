@@ -51,7 +51,7 @@ type UploadConfig struct {
 	StagingTTL time.Duration
 	// PublicURL is the server's address as clients reach it, such as https://registry.example.com
 	// behind a reverse proxy. Publishing writes it before each download path in artifacts.json;
-	// empty, the paths stay relative (/{vcs}/artifacts/{version}/files/{name}).
+	// empty, the paths stay relative (/{product}/artifacts/{version}/files/{name}).
 	PublicURL string
 }
 
@@ -92,74 +92,76 @@ func (cfg UploadConfig) limits() regfs.Limits {
 type uploader struct {
 	reg *core.Registry
 	cfg UploadConfig
+	tid string // token_id of cfg.Token, recorded as publishedBy
 }
 
 // AddUploadRoutes registers the two-step upload of a release, and the download of its files:
 //
-//	PUT  /{vcs}/artifacts/{version}/files/{name}   stream one file into staging
-//	POST /{vcs}/artifacts/{version}/publish        check the staged files and publish them at once
-//	GET  /{vcs}/artifacts/{version}/files/{name}   download a file of a published version
+//	PUT  /{product}/artifacts/{version}/files/{name}   stream one file into staging
+//	POST /{product}/artifacts/{version}/publish        check the staged files and publish them at once
+//	GET  /{product}/artifacts/{version}/files/{name}   download a file of a published version
 //
-// artifacts.json must be uploaded last: it is refused while a file it lists is missing.
-// Publishing rewrites it so that each "path" is the file's GET URL, and keeps the uploaded
-// one as artifacts.goreleaser.json.
+// Every version needs a registry.yaml; artifacts.json, metadata.json and the checksums file
+// are optional. artifacts.json must be uploaded last: it is refused while a file it lists is
+// missing. Publishing rewrites it so that each "path" is the file's GET URL, and keeps the
+// uploaded one as artifacts.goreleaser.json.
 // A published version is immutable: PUT and POST answer 409 once it exists.
 // Every accepted or refused request is recorded in reg.Audit.
 // It returns cfg with its defaults applied.
 func AddUploadRoutes(reg *core.Registry, cfg UploadConfig) UploadConfig {
 	cfg = cfg.WithDefaults()
-	s := &uploader{reg: reg, cfg: cfg}
 	tid := ""
 	if cfg.Token != "" {
 		tid = audit.TokenID(cfg.Token)
 	}
+	zuploader := &uploader{reg: reg, cfg: cfg, tid: tid}
 	// refused audits and answers a request that failed after authentication.
 	refused := func(w http.ResponseWriter, r *http.Request, event string, err error) {
 		status, msg := core.ErrorStatus(err)
 		if status >= 500 {
 			msg = err.Error() // the audit log is private: keep the cause
 		}
-		s.reg.Audit.Record(r, event, map[string]any{
-			"vcs": r.PathValue("vcs"), "version": r.PathValue("version"), "name": r.PathValue("name"),
+		zuploader.reg.Audit.Record(r, event, map[string]any{
+			"product": r.PathValue("product"), "version": r.PathValue("version"), "name": r.PathValue("name"),
 			"status": status, "error": msg, "token_id": tid,
 		})
 		core.WriteError(w, r, err)
 	}
 
-	reg.Mux.HandleFunc("PUT /{vcs}/artifacts/{version}/files/{name}", func(w http.ResponseWriter, r *http.Request) {
+	reg.Mux.HandleFunc("PUT /{product}/artifacts/{version}/files/{name}", func(w http.ResponseWriter, r *http.Request) {
 		if err := authorize(cfg, r); err != nil {
-			s.auditAuthFailure(r, err)
+			zuploader.auditAuthFailure(r, err)
 			writeAuthError(w, r, err)
 			return
 		}
-		res, err := s.putFile(w, r)
+		res, err := zuploader.putFile(w, r)
 		if err != nil {
 			refused(w, r, "upload_refused", err)
 			return
 		}
-		s.reg.Audit.Record(r, "upload", map[string]any{
-			"vcs": r.PathValue("vcs"), "version": r.PathValue("version"), "name": res.Name,
+		zuploader.reg.Audit.Record(r, "upload", map[string]any{
+			"product": r.PathValue("product"), "version": r.PathValue("version"), "name": res.Name,
 			"size": res.Size, "sha256": res.Sha256, "replaced": res.replaced, "token_id": tid,
 		})
 		core.WriteJSON(w, http.StatusCreated, res)
 	})
-	reg.Mux.HandleFunc("POST /{vcs}/artifacts/{version}/publish", func(w http.ResponseWriter, r *http.Request) {
+	reg.Mux.HandleFunc("POST /{product}/artifacts/{version}/publish", func(w http.ResponseWriter, r *http.Request) {
 		if err := authorize(cfg, r); err != nil {
-			s.auditAuthFailure(r, err)
+			zuploader.auditAuthFailure(r, err)
 			writeAuthError(w, r, err)
 			return
 		}
-		res, err := s.publish(w, r)
+		res, err := zuploader.publish(w, r)
 		if err != nil {
 			refused(w, r, "publish_refused", err)
 			return
 		}
-		s.reg.Audit.Record(r, "publish", map[string]any{
-			"vcs": res.VCS, "version": res.Version, "latest": res.Latest, "files": res.records, "token_id": tid,
+		zuploader.reg.Audit.Record(r, "publish", map[string]any{
+			"product": res.Product, "version": res.Version, "latest": res.Latest, "files": res.records, "token_id": tid,
 		})
 		core.WriteJSON(w, http.StatusOK, res)
 	})
-	reg.Mux.HandleFunc("GET /{vcs}/artifacts/{version}/files/{name}", serveReleaseFile(reg.Layout))
+	reg.Mux.HandleFunc("GET /{product}/artifacts/{version}/files/{name}", serveReleaseFile(reg.Layout))
 	return cfg
 }
 
@@ -177,6 +179,7 @@ func authorize(cfg UploadConfig, r *http.Request) error {
 		return core.Errorf(http.StatusForbidden, "upload is disabled: no token configured")
 	}
 	got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+
 	if !ok || subtle.ConstantTimeCompare([]byte(got), []byte(cfg.Token)) != 1 {
 		return core.Errorf(http.StatusUnauthorized, "invalid or missing bearer token")
 	}
@@ -199,20 +202,26 @@ func extendDeadlines(w http.ResponseWriter) {
 	_ = rc.SetWriteDeadline(deadline)
 }
 
-// target validates vcs and version and returns the published and staging directories.
-func (s *uploader) target(r *http.Request) (vcs, version, final, staging string, err error) {
-	vcs, version = r.PathValue("vcs"), r.PathValue("version")
-	if !core.ValidName(vcs) || !core.ValidName(version) || version == "latest" {
-		return "", "", "", "", core.Errorf(http.StatusBadRequest, "invalid vcs or version name")
+// target validates product and version and returns the published and staging directories.
+func (s *uploader) target(r *http.Request) (product, version, final, staging string, err error) {
+	product, version = r.PathValue("product"), r.PathValue("version")
+	if !core.ValidName(product) || !core.ValidName(version) || version == "latest" {
+		return "", "", "", "", core.Errorf(http.StatusBadRequest, "invalid product or version name")
+	}
+	if product == reservedProduct {
+		return "", "", "", "", core.Errorf(http.StatusBadRequest, "product name %s is reserved", reservedProduct)
+	}
+	if reservedFile(version) { // its directory would take the place of a product file
+		return "", "", "", "", core.Errorf(http.StatusBadRequest, "version name %s is reserved", version)
 	}
 	l := s.reg.Layout
-	if final, err = l.VersionDir(vcs, version); err != nil {
+	if final, err = l.VersionDir(product, version); err != nil {
 		return "", "", "", "", err
 	}
-	if staging, err = l.StagingDir(vcs, version); err != nil {
+	if staging, err = l.StagingDir(product, version); err != nil {
 		return "", "", "", "", err
 	}
-	return vcs, version, final, staging, nil
+	return product, version, final, staging, nil
 }
 
 func exists(path string) (bool, error) {
@@ -223,8 +232,8 @@ func exists(path string) (bool, error) {
 	return err == nil, err
 }
 
-func errPublished(vcs, version string) error {
-	return core.Errorf(http.StatusConflict, "version %s/%s is already published and cannot be changed", vcs, version)
+func errPublished(product, version string) error {
+	return core.Errorf(http.StatusConflict, "version %s/%s is already published and cannot be changed", product, version)
 }
 
 type putResult struct {
@@ -237,7 +246,7 @@ type putResult struct {
 
 func (s *uploader) putFile(w http.ResponseWriter, r *http.Request) (*putResult, error) {
 	cfg := s.cfg
-	vcs, version, final, staging, err := s.target(r)
+	product, version, final, staging, err := s.target(r)
 	if err != nil {
 		return nil, err
 	}
@@ -245,16 +254,16 @@ func (s *uploader) putFile(w http.ResponseWriter, r *http.Request) (*putResult, 
 	if !core.ValidName(name) {
 		return nil, core.Errorf(http.StatusBadRequest, "invalid file name: use [A-Za-z0-9._-] only")
 	}
-	if name == originalArtifactsFile {
+	if name != artifactsFile && reservedFile(name) {
 		return nil, core.Errorf(http.StatusBadRequest, "%s is reserved: publishing writes it", name)
 	}
 	if published, err := exists(final); err != nil || published {
 		if err != nil {
 			return nil, err
 		}
-		return nil, errPublished(vcs, version)
+		return nil, errPublished(product, version)
 	}
-	b, err := regfs.UploadBudget(cfg.limits(), s.reg.Layout, vcs, version, staging, name)
+	b, err := regfs.UploadBudget(cfg.limits(), s.reg.Layout, product, version, staging, name)
 	if err != nil {
 		return nil, err
 	}
@@ -300,6 +309,16 @@ func (s *uploader) putFile(w http.ResponseWriter, r *http.Request) (*putResult, 
 	if want := r.Header.Get("X-Checksum-Sha256"); want != "" && !strings.EqualFold(want, sum) {
 		return nil, core.Errorf(http.StatusUnprocessableEntity, "sha256 mismatch: got %s, X-Checksum-Sha256 says %s", sum, want)
 	}
+	switch name {
+	case productFile:
+		if err := checkUploadedProductFile(tmp.Name(), size); err != nil {
+			return nil, err
+		}
+	case changelogFile:
+		if err := checkUploadedChangelog(tmp.Name(), size); err != nil {
+			return nil, err
+		}
+	}
 
 	s.reg.UploadMu.Lock()
 	defer s.reg.UploadMu.Unlock()
@@ -307,10 +326,10 @@ func (s *uploader) putFile(w http.ResponseWriter, r *http.Request) (*putResult, 
 		if err != nil {
 			return nil, err
 		}
-		return nil, errPublished(vcs, version)
+		return nil, errPublished(product, version)
 	}
 	// Other uploads may have landed while this one streamed: check the quotas again, for good.
-	if b, err = regfs.UploadBudget(cfg.limits(), s.reg.Layout, vcs, version, staging, name); err != nil {
+	if b, err = regfs.UploadBudget(cfg.limits(), s.reg.Layout, product, version, staging, name); err != nil {
 		return nil, err
 	}
 	if size > b.Limit {
@@ -340,7 +359,7 @@ func (s *uploader) putFile(w http.ResponseWriter, r *http.Request) (*putResult, 
 }
 
 type publishResult struct {
-	VCS     string   `json:"vcs"`
+	Product string   `json:"product"`
 	Version string   `json:"version"`
 	Files   []string `json:"files"`
 	Latest  bool     `json:"latest"`
@@ -371,7 +390,7 @@ func checkUploadedArtifacts(file, staging string, size int64) error {
 
 func (s *uploader) publish(w http.ResponseWriter, r *http.Request) (*publishResult, error) {
 	cfg := s.cfg
-	vcs, version, final, staging, err := s.target(r)
+	product, version, final, staging, err := s.target(r)
 	if err != nil {
 		return nil, err
 	}
@@ -390,11 +409,11 @@ func (s *uploader) publish(w http.ResponseWriter, r *http.Request) (*publishResu
 		if err != nil {
 			return nil, err
 		}
-		return nil, errPublished(vcs, version)
+		return nil, errPublished(product, version)
 	}
 	entries, err := os.ReadDir(staging)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, core.Errorf(http.StatusNotFound, "nothing uploaded for %s/%s", vcs, version)
+		return nil, core.Errorf(http.StatusNotFound, "nothing uploaded for %s/%s", product, version)
 	}
 	if err != nil {
 		return nil, err
@@ -405,12 +424,42 @@ func (s *uploader) publish(w http.ResponseWriter, r *http.Request) (*publishResu
 			files = append(files, e.Name())
 		}
 	}
-	sums, err := checkRelease(staging, version, files)
+	sums, checksums, err := checkRelease(staging, version, files)
 	if err != nil {
 		return nil, err
 	}
-	if files, err = rewriteStagedArtifacts(cfg, staging, vcs, version, files, sums); err != nil {
+	hasArtifacts := slices.Contains(files, artifactsFile)
+	var published []artifact
+	if hasArtifacts {
+		if published, files, err = rewriteStagedArtifacts(cfg, staging, product, version, files, sums); err != nil {
+			return nil, err
+		}
+	}
+	// Without a checksums file, publishing writes one, once every check has passed.
+	var generated []byte
+	if checksums == "" {
+		checksums, generated = checksumsFile, writeChecksums(files, sums)
+		sums[checksums] = hexSha256(generated)
+		files = append(files, checksums)
+		slices.Sort(files)
+	}
+	arts := published
+	switch {
+	case !hasArtifacts:
+		arts = inferArtifacts(files, checksums)
+	case generated != nil:
+		arts = append(slices.Clone(published), artifact{Name: checksums, Type: "Checksum"})
+	}
+	if !slices.ContainsFunc(arts, func(a artifact) bool { return artifactKinds[a.Type] != "" }) {
+		return nil, unprocessable("no artifact to publish: upload at least one file besides %s", productFile)
+	}
+	if files, err = s.writeRelease(staging, product, version, arts, files, sums); err != nil {
 		return nil, err
+	}
+	if generated != nil {
+		if err := writeAtomic(filepath.Join(staging, checksums), generated); err != nil {
+			return nil, err
+		}
 	}
 	records := make([]fileRecord, 0, len(files))
 	for _, f := range files {
@@ -421,100 +470,125 @@ func (s *uploader) publish(w http.ResponseWriter, r *http.Request) (*publishResu
 		records = append(records, fileRecord{Name: f, Size: info.Size(), Sha256: sums[f]})
 	}
 
-	vcsDir := filepath.Dir(final)
-	if err := os.MkdirAll(vcsDir, 0o755); err != nil {
+	productDir := filepath.Dir(final)
+	if err := os.MkdirAll(productDir, 0o755); err != nil {
 		return nil, err
 	}
 	if err := os.Rename(staging, final); err != nil {
+		if generated != nil { // a later publish must not take it for an uploaded one
+			_ = os.Remove(filepath.Join(staging, checksums))
+		}
 		return nil, err
 	}
 	if latest {
-		if err := copyAtomic(filepath.Join(final, "artifacts.json"), filepath.Join(vcsDir, "artifacts.json")); err != nil {
+		if err := setLatest(productDir, final, hasArtifacts); err != nil {
 			return nil, fmt.Errorf("version published but latest not updated: %w", err)
 		}
 	}
-	return &publishResult{VCS: vcs, Version: version, Files: files, Latest: latest, records: records}, nil
-}
-
-// unchecked files carry no line in the checksums file: the metadata and signatures of the checksums.
-func unchecked(name string) bool {
-	return name == artifactsFile || name == originalArtifactsFile || name == "metadata.json" ||
-		strings.HasSuffix(name, ".sig") || strings.HasSuffix(name, ".pem")
-}
-
-// checkRelease refuses (422) a staged release that goreleaser would not have produced whole.
-// It returns the sha256 of every file.
-func checkRelease(dir, version string, files []string) (map[string]string, error) {
-	invalid := func(format string, a ...any) error {
-		return core.Errorf(http.StatusUnprocessableEntity, format, a...)
+	if err := writeIndex(s.reg.Layout, product); err != nil {
+		return nil, fmt.Errorf("version published but %s not updated: %w", indexFile, err)
 	}
+	return &publishResult{Product: product, Version: version, Files: files, Latest: latest, records: records}, nil
+}
 
-	var checksumsFile string
+// setLatest makes the published version in final the latest of the product in productDir:
+// <product>/release.json is its release.json, and <product>/artifacts.json its artifacts.json,
+// or no file when it has none. release.json, the mark LatestVersion reads, is written last.
+func setLatest(productDir, final string, hasArtifacts bool) error {
+	latestArtifacts := filepath.Join(productDir, artifactsFile)
+	if hasArtifacts {
+		if err := copyAtomic(filepath.Join(final, artifactsFile), latestArtifacts); err != nil {
+			return err
+		}
+	} else if err := os.Remove(latestArtifacts); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return copyAtomic(filepath.Join(final, releaseFile), filepath.Join(productDir, releaseFile))
+}
+
+// writeChecksums is the checksums file of files, as goreleaser writes it: one
+// "<sha256>  <name>" line per file that needs one, by name.
+func writeChecksums(files []string, sums map[string]string) []byte {
+	var b strings.Builder
+	for _, f := range files {
+		if !unchecked(f) {
+			fmt.Fprintf(&b, "%s  %s\n", sums[f], f)
+		}
+	}
+	return []byte(b.String())
+}
+
+// unchecked files carry no line in the checksums file: the files the server writes, the metadata,
+// the product file, the changelog and the signatures of the checksums.
+func unchecked(name string) bool {
+	return reservedFile(name) || name == metadataFile || name == productFile || name == changelogFile ||
+		strings.HasSuffix(name, ".sig") || strings.HasSuffix(name, ".pem") || strings.HasSuffix(name, ".sigstore.json")
+}
+
+// checkRelease refuses (422) a staged release whose files do not agree: registry.yaml is
+// required; the checksums file, artifacts.json and metadata.json are checked when they are
+// there. It returns the sha256 of every file, and the name of the checksums file ("" for none).
+func checkRelease(dir, version string, files []string) (map[string]string, string, error) {
+	var checksums string
 	for _, f := range files {
 		if strings.HasSuffix(strings.ToLower(f), "checksums.txt") {
-			if checksumsFile != "" {
-				return nil, invalid("several checksums files: %s and %s", checksumsFile, f)
+			if checksums != "" {
+				return nil, "", unprocessable("several checksums files: %s and %s", checksums, f)
 			}
-			checksumsFile = f
+			checksums = f
 		}
 	}
-	if checksumsFile == "" {
-		return nil, invalid("no checksums file (*checksums.txt) uploaded")
-	}
-	for _, required := range []string{"artifacts.json", "metadata.json"} {
-		if !slices.Contains(files, required) {
-			return nil, invalid("%s not uploaded", required)
-		}
+	if !slices.Contains(files, productFile) {
+		return nil, "", unprocessable("%s not uploaded: every version needs its product card", productFile)
 	}
 
-	listed, err := readChecksums(filepath.Join(dir, checksumsFile))
-	if err != nil {
-		return nil, invalid("%s: %v", checksumsFile, err)
-	}
 	sums := make(map[string]string, len(files))
 	for _, f := range files {
 		got, err := fileSha256(filepath.Join(dir, f))
 		if err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		sums[f] = got
-		if f == checksumsFile || unchecked(f) {
-			continue
+	}
+	if checksums != "" {
+		listed, err := readChecksums(filepath.Join(dir, checksums))
+		if err != nil {
+			return nil, "", unprocessable("%s: %v", checksums, err)
 		}
-		want, ok := listed[f]
-		if !ok {
-			return nil, invalid("%s is not listed in %s", f, checksumsFile)
-		}
-		if !strings.EqualFold(got, want) {
-			return nil, invalid("%s: sha256 is %s but %s says %s", f, got, checksumsFile, want)
+		for _, f := range files {
+			if f == checksums || unchecked(f) {
+				continue
+			}
+			want, ok := listed[f]
+			if !ok {
+				return nil, "", unprocessable("%s is not listed in %s", f, checksums)
+			}
+			if !strings.EqualFold(sums[f], want) {
+				return nil, "", unprocessable("%s: sha256 is %s but %s says %s", f, sums[f], checksums, want)
+			}
 		}
 	}
 
-	artifacts, err := os.ReadFile(filepath.Join(dir, "artifacts.json"))
-	if err != nil {
-		return nil, err
+	if slices.Contains(files, metadataFile) {
+		raw, err := os.ReadFile(filepath.Join(dir, metadataFile))
+		if err != nil {
+			return nil, "", err
+		}
+		var meta struct {
+			Tag     string `json:"tag"`
+			Version string `json:"version"`
+		}
+		if err := json.Unmarshal(raw, &meta); err != nil {
+			return nil, "", unprocessable("metadata.json is not valid JSON")
+		}
+		if meta.Tag == "" && meta.Version == "" {
+			return nil, "", unprocessable("metadata.json has neither tag nor version")
+		}
+		if version != meta.Tag && version != meta.Version && version != "v"+meta.Version {
+			return nil, "", unprocessable("metadata.json describes %s (version %s), not %s", meta.Tag, meta.Version, version)
+		}
 	}
-	if !json.Valid(artifacts) {
-		return nil, invalid("artifacts.json is not valid JSON")
-	}
-	raw, err := os.ReadFile(filepath.Join(dir, "metadata.json"))
-	if err != nil {
-		return nil, err
-	}
-	var meta struct {
-		Tag     string `json:"tag"`
-		Version string `json:"version"`
-	}
-	if err := json.Unmarshal(raw, &meta); err != nil {
-		return nil, invalid("metadata.json is not valid JSON")
-	}
-	if meta.Tag == "" && meta.Version == "" {
-		return nil, invalid("metadata.json has neither tag nor version")
-	}
-	if version != meta.Tag && version != meta.Version && version != "v"+meta.Version {
-		return nil, invalid("metadata.json describes %s (version %s), not %s", meta.Tag, meta.Version, version)
-	}
-	return sums, nil
+	return sums, checksums, nil
 }
 
 // readChecksums parses "<sha256>  <name>" lines, as written by goreleaser and sha256sum.
@@ -556,8 +630,8 @@ func fileSha256(path string) (string, error) {
 
 // rewriteStagedArtifacts checks the staged artifacts.json against the staged files, then
 // replaces it by its rewritten form and keeps the uploaded one as artifacts.goreleaser.json.
-// It returns the staged file names and updates sums to match.
-func rewriteStagedArtifacts(cfg UploadConfig, staging, vcs, version string, files []string, sums map[string]string) ([]string, error) {
+// It returns the published entries and the staged file names, and updates sums to match.
+func rewriteStagedArtifacts(cfg UploadConfig, staging, product, version string, files []string, sums map[string]string) ([]artifact, []string, error) {
 	// An artifacts.goreleaser.json in staging was left by a publish that failed after its
 	// rewrite (uploading artifacts.json removes it): it is the uploaded artifacts.json.
 	original := filepath.Join(staging, originalArtifactsFile)
@@ -567,45 +641,46 @@ func rewriteStagedArtifacts(cfg UploadConfig, staging, vcs, version string, file
 		source = original
 	}
 	if info, err := os.Stat(source); err != nil {
-		return nil, err
+		return nil, nil, err
 	} else if info.Size() > maxArtifactsSize {
-		return nil, unprocessable("artifacts.json is larger than %d MiB", maxArtifactsSize>>20)
+		return nil, nil, unprocessable("artifacts.json is larger than %d MiB", maxArtifactsSize>>20)
 	}
 	data, err := os.ReadFile(source)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	published, err := checkArtifacts(staging, data, sums)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	listed := map[string]bool{artifactsFile: true, originalArtifactsFile: true, "metadata.json": true}
+	listed := map[string]bool{artifactsFile: true, originalArtifactsFile: true, releaseFile: true,
+		metadataFile: true, productFile: true, changelogFile: true}
 	for _, a := range published {
 		listed[a.Name] = true
 	}
 	for _, f := range files {
 		if !listed[f] {
-			return nil, unprocessable("%s is uploaded but artifacts.json does not list it", f)
+			return nil, nil, unprocessable("%s is uploaded but artifacts.json does not list it", f)
 		}
 	}
 
-	rewritten, err := rewriteArtifacts(published, releaseFilesURL(cfg.PublicURL, vcs, version))
+	rewritten, err := rewriteArtifacts(published, releaseFilesURL(cfg.PublicURL, product, version))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !hadOriginal {
 		if err := writeAtomic(original, data); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		files = append(files, originalArtifactsFile)
 		slices.Sort(files)
 	}
 	if err := writeAtomic(filepath.Join(staging, artifactsFile), rewritten); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	sums[originalArtifactsFile] = hexSha256(data)
 	sums[artifactsFile] = hexSha256(rewritten)
-	return files, nil
+	return published, files, nil
 }
 
 func hexSha256(data []byte) string {
@@ -641,4 +716,30 @@ func writeAtomic(dst string, data []byte) error {
 		return err
 	}
 	return os.Rename(tmp.Name(), dst)
+}
+
+// writeRelease writes release.json into staging, from the staged files and the published
+// entries (of artifacts.json, or inferred). It returns the staged file names and updates sums to match.
+func (s *uploader) writeRelease(staging, product, version string, published []artifact, files []string, sums map[string]string) ([]string, error) {
+	doc, err := buildRelease(releaseInput{
+		dir: staging, product: product, version: version,
+		filesURL: releaseFilesURL(s.cfg.PublicURL, product, version),
+		tokenID:  s.tid, now: time.Now(), published: published, sums: sums,
+	})
+	if err != nil {
+		return nil, err
+	}
+	data, err := encodeDocument(doc)
+	if err != nil {
+		return nil, err
+	}
+	if err := writeAtomic(filepath.Join(staging, releaseFile), data); err != nil {
+		return nil, err
+	}
+	if !slices.Contains(files, releaseFile) { // else left by a publish that failed later
+		files = append(files, releaseFile)
+		slices.Sort(files)
+	}
+	sums[releaseFile] = hexSha256(data)
+	return files, nil
 }

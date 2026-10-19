@@ -124,6 +124,7 @@ func Release() map[string]string {
 		"tool_0.1.0_darwin_arm64.tar.gz": "DARWIN",
 		"artifacts.json":                 string(b),
 		"metadata.json":                  `{"project_name":"tool","tag":"v0.1.0","version":"0.1.0"}`,
+		"registry.yaml":                  "apiVersion: local-registry/v1\n",
 	}
 	files["tool_0.1.0_checksums.txt"] = Sha("DARWIN") + "  tool_0.1.0_darwin_arm64.tar.gz\n" +
 		Sha("LINUX") + "  tool_0.1.0_linux_amd64.tar.gz\n"

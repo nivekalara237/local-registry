@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nivekalara237/local-registry/schema/registry.schema.json",
+  "title": "local-registry/v1 product file (registry.yaml)",
+  "description": "Product card of a product published to local-registry, uploaded with each version. Release notes are not written here: they come from CHANGELOG.md (goreleaser's, or Keep a Changelog).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion"],
+  "properties": {
+    "apiVersion": { "const": "local-registry/v1" },
+    "displayName": { "type": "string", "maxLength": 100 },
+    "description": { "type": "string", "maxLength": 500 },
+    "license": { "type": "string", "description": "SPDX identifier (MIT, Apache-2.0…) or \"Proprietary\"." },
+    "owners": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "email": { "type": "string", "pattern": "@" }
+        }
+      }
+    },
+    "links": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "url"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "url": { "type": "string", "pattern": "^https?://[^/]+" }
+        }
+      }
+    },
+    "keywords": {
+      "type": "array",
+      "maxItems": 20,
+      "items": { "type": "string", "pattern": "\\S" }
+    },
+    "labels": {
+      "type": "object",
+      "maxProperties": 50,
+      "additionalProperties": { "type": ["string", "number", "boolean"] }
+    },
+    "install": { "type": "string", "maxLength": 10240, "description": "Markdown, shown as is." },
+    "deprecated": {
+      "description": "false, true, or a message such as \"replaced by sonarbridge2\".",
+      "type": ["boolean", "string"]
+    }
+  }
+}

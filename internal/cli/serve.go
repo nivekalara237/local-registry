@@ -137,10 +137,11 @@ func newServer() (*localregistry.LocalRegistryServer, error) {
 	server.AddFileRoute("/assets/binary/{filePath}", "GET", "filePath")
 	server.AddFileRoute("/assets/checksum/{filename}", "GET", "filename")
 	server.AddReleaseRoutes(args.publicURL)
+	server.AddProductRoutes()
 	// Liveness probe (Docker HEALTHCHECK, load balancers): answers as soon as the server serves.
 	server.AddRoute("/healthz", "GET", func(...string) any { return map[string]string{"status": "ok"} })
-	server.AddRouteE("/{vcs}/artifacts", "GET", fnGetArtifacts)
-	server.AddRouteE("/{vcs}/artifacts/{version}", "GET", fnGetArtifacts)
+	server.AddRouteE("/{product}/artifacts", "GET", fnGetArtifacts)
+	server.AddRouteE("/{product}/artifacts/{version}", "GET", fnGetArtifacts)
 	server.AddRouteE("/artifacts/all", "GET", fnGetAllArtifacts)
 	return server, nil
 }
@@ -153,14 +154,14 @@ func fnGetAllArtifacts(vps ...string) (any, error) {
 
 func fnGetArtifacts(pvs ...string) (any, error) {
 	var version string
-	var vcs string
+	var product string
 	if len(pvs) > 0 {
-		vcs = pvs[0]
+		product = pvs[0]
 	}
 	if len(pvs) > 1 {
 		version = pvs[1]
 	}
-	artifactsFile, err := localregistry.NewLayout(args.absAsset).ArtifactsFile(vcs, version)
+	artifactsFile, err := localregistry.NewLayout(args.absAsset).ArtifactsFile(product, version)
 	if err != nil {
 		return nil, err
 	}

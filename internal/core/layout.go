@@ -42,8 +42,8 @@ func IsPublicFile(name string) bool {
 
 // Layout is the asset tree under the asset path, shared by every route that reads or writes it:
 //
-//	bin.local/assets/binaries/<vcs>/artifacts.json   latest release of <vcs>
-//	bin.local/assets/binaries/<vcs>/<version>/       one release (binaries, checksums, artifacts.json, metadata.json)
+//	bin.local/assets/binaries/<product>/artifacts.json   latest release of <product>
+//	bin.local/assets/binaries/<product>/<version>/       one release (binaries, checksums, artifacts.json, metadata.json)
 //
 // Path methods validate their names and return an error wrapping ErrNotFound for a name
 // that is not a single safe segment.
@@ -69,15 +69,15 @@ func (l Layout) BinariesDir() string {
 	return filepath.Join(l.AssetsDir(), "binaries")
 }
 
-func (l Layout) VCSDir(vcs string) (string, error) {
-	if !ValidName(vcs) {
-		return "", fmt.Errorf("vcs %q: %w", vcs, ErrNotFound)
+func (l Layout) ProductDir(product string) (string, error) {
+	if !ValidName(product) {
+		return "", fmt.Errorf("product %q: %w", product, ErrNotFound)
 	}
-	return filepath.Join(l.BinariesDir(), vcs), nil
+	return filepath.Join(l.BinariesDir(), product), nil
 }
 
-func (l Layout) VersionDir(vcs, version string) (string, error) {
-	dir, err := l.VCSDir(vcs)
+func (l Layout) VersionDir(product, version string) (string, error) {
+	dir, err := l.ProductDir(product)
 	if err != nil {
 		return "", err
 	}
@@ -87,16 +87,16 @@ func (l Layout) VersionDir(vcs, version string) (string, error) {
 	return filepath.Join(dir, version), nil
 }
 
-// ArtifactsFile is <vcs>/artifacts.json for version "" or "latest", else <vcs>/<version>/artifacts.json.
-func (l Layout) ArtifactsFile(vcs, version string) (string, error) {
+// ArtifactsFile is <product>/artifacts.json for version "" or "latest", else <product>/<version>/artifacts.json.
+func (l Layout) ArtifactsFile(product, version string) (string, error) {
 	if version == "" || version == "latest" {
-		dir, err := l.VCSDir(vcs)
+		dir, err := l.ProductDir(product)
 		if err != nil {
 			return "", err
 		}
 		return filepath.Join(dir, "artifacts.json"), nil
 	}
-	dir, err := l.VersionDir(vcs, version)
+	dir, err := l.VersionDir(product, version)
 	if err != nil {
 		return "", err
 	}
@@ -105,11 +105,11 @@ func (l Layout) ArtifactsFile(vcs, version string) (string, error) {
 
 // StagingDir holds the files PUT for a version until it is published. It lives in
 // bin.local/.uploads, outside AssetsDir, so the catalogue never sees half an upload.
-func (l Layout) StagingDir(vcs, version string) (string, error) {
-	if !ValidName(vcs) || !ValidName(version) {
-		return "", fmt.Errorf("staging %q/%q: %w", vcs, version, ErrNotFound)
+func (l Layout) StagingDir(product, version string) (string, error) {
+	if !ValidName(product) || !ValidName(version) {
+		return "", fmt.Errorf("staging %q/%q: %w", product, version, ErrNotFound)
 	}
-	return filepath.Join(l.UploadsDir(), vcs, version), nil
+	return filepath.Join(l.UploadsDir(), product, version), nil
 }
 
 // UploadsDir holds every StagingDir; its total size is what UploadConfig.MaxStagingSize caps.
