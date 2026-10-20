@@ -70,6 +70,9 @@ if [ -d "$artifacts" ]; then
 fi
 
 command -v jq >/dev/null || die "jq is required"
+# A native Windows jq.exe (Git Bash, MSYS2, Cygwin) ends its lines with CRLF: drop the CRs,
+# or they end up in names, checksums and URLs.
+jq() { command jq "$@" | tr -d '\r'; }
 command -v curl >/dev/null || die "curl is required"
 if ! $dry; then
 	url=${LOCAL_REGISTRY_URL:?LOCAL_REGISTRY_URL is not set}
