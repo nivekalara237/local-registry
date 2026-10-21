@@ -1,0 +1,28 @@
+.hero {
+  padding: 4rem 0 3rem;
+  text-align: center;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.tagline {
+  font-size: 1.25rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.card {
+  height: 100%;
+  padding: 1.5rem;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: var(--ifm-card-border-radius);
+}
+
+.card h2 {
+  font-size: 1.25rem;
+}

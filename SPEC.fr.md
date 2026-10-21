@@ -1,98 +1,127 @@
 # Le standard `local-registry/v1`
 
-[English](SPEC.md)
+[English](SPEC.md) · Statut : **stable**, version `local-registry/v1`
 
-Ce standard décrit les **produits** publiés dans local-registry et leurs **versions**. Il s'appuie sur ce que goreleaser produit, mais goreleaser est facultatif : `registry.yaml` et les fichiers suffisent. Un seul fichier s'écrit à la main, et il est obligatoire.
+Ce document est la définition normative des documents et des routes que local-registry utilise pour décrire ce qu'il publie. Il s'adresse à ceux qui écrivent un client, un serveur ou un outil autour de local-registry. Pour *utiliser* local-registry, lisez plutôt la [documentation](website/i18n/fr/docusaurus-plugin-content-docs/current/intro.md) : les guides et les exemples s'y trouvent, pas ici.
 
-- **Produit** : ce qu'une équipe livre et versionne, par exemple `sonarbridge`, `billing-agent`, `db-migrations` ou `security-policies`. C'est le segment `{product}` de toutes les URLs. Son nom respecte `[A-Za-z0-9._-]+`, ne vaut ni `.`, ni `..`, ni `products`, et se choisit au moment de l'upload. Les minuscules avec `-` sont recommandées.
-- **Version** : une publication d'un produit, c'est-à-dire le segment `{version}`, en général le tag git (`v1.4.2`). Elle est immuable une fois publiée.
+Les mots-clés **DOIT**, **NE DOIT PAS**, **DEVRAIT** et **PEUT** s'entendent au sens de la [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) et de la [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174) lorsque, et seulement lorsque, ils sont écrits en capitales grasses. Les messages d'erreur cités sont informatifs ; les codes de statut sont normatifs. En cas de divergence, la [version anglaise](SPEC.md) fait foi.
 
-| Document | Écrit par | Où | Rôle |
+## Sommaire
+
+1. [Terminologie](#1-terminologie)
+2. [Vue d'ensemble](#2-vue-densemble)
+3. [`registry.yaml` : la fiche produit](#3-registryyaml--la-fiche-produit)
+4. [`CHANGELOG.md` : les notes de version](#4-changelogmd--les-notes-de-version)
+5. [`release.json` : une version](#5-releasejson--une-version)
+6. [`index.json` : un produit et ses versions](#6-indexjson--un-produit-et-ses-versions)
+7. [Routes](#7-routes)
+8. [Règles de publication](#8-règles-de-publication)
+9. [Conformité des clients](#9-conformité-des-clients)
+10. [Versionnement du standard](#10-versionnement-du-standard)
+
+## 1. Terminologie
+
+| Terme | Définition |
+| --- | --- |
+| **Produit** | Ce qu'une équipe livre et versionne : un CLI, un lot de migrations, un paquet de politiques. C'est le segment `{product}` de chaque URL. |
+| **Version** | Une publication d'un produit, en général son tag git (`v1.4.2`). C'est le segment `{version}` de chaque URL. |
+| **Nom valide** | Une chaîne qui correspond à `[A-Za-z0-9._-]+` et qui n'est ni `.` ni `..`. |
+| **Staging** | La zone privée où l'on dépose les fichiers d'une version avant sa publication. |
+| **Publication** | L'opération qui vérifie une version déposée et la rend visible, entière, en une seule étape. |
+| **Artefact** | Un fichier téléchargeable d'une version qui est un livrable à part entière (archive, binaire, paquet, fichier, sources), par opposition au fichier de checksums et aux pièces jointes. |
+| **Pièce jointe** | Un SBOM, une signature ou un certificat qui couvre un autre fichier, nommé `<fichier couvert><suffixe>`. |
+| **Latest** | La version désignée comme courante pour un produit (section 6). |
+
+Un nom de produit **DOIT** être un nom valide autre que `products`. Un nom de version **DOIT** être un nom valide autre que `latest`, `artifacts.json`, `artifacts.goreleaser.json`, `release.json` et `index.json`. Des noms en minuscules avec `-` **DEVRAIENT** être utilisés. Une version publiée **NE DOIT PAS** changer.
+
+## 2. Vue d'ensemble
+
+| Document | Écrit par | Stocké dans | Rôle |
 | --- | --- | --- | --- |
-| `registry.yaml` | l'équipe, obligatoire | envoyé avec chaque version | Fiche du produit, et dépréciation de la version |
-| `CHANGELOG.md` | goreleaser (`dist/CHANGELOG.md`) ou l'équipe, facultatif | envoyé avec chaque version | Source des notes de version |
-| `release.json` | le serveur, à la publication | `binaries/<product>/<version>/release.json` | Une version, normalisée, immuable |
-| `index.json` | le serveur, à chaque publication | `binaries/<product>/index.json` | Le produit et ses versions |
+| `registry.yaml` | l'équipe, **obligatoire** | `<product>/<version>/registry.yaml` | Fiche produit, et dépréciation de la version |
+| `CHANGELOG.md` | goreleaser ou l'équipe, facultatif | `<product>/<version>/CHANGELOG.md` | Source des notes de version |
+| `release.json` | le serveur, à la publication | `<product>/<version>/release.json` | Une version, normalisée, immuable |
+| `index.json` | le serveur, à chaque publication | `<product>/index.json` | Le produit et toutes ses versions |
 
-Chaque document généré porte `"apiVersion": "local-registry/v1"`. `artifacts.json` et `metadata.json`, s'ils sont envoyés, restent servis comme avant.
+Les chemins sont relatifs à l'arborescence publiée du serveur. Chaque document généré par le serveur porte `"apiVersion": "local-registry/v1"`.
 
-```
-goreleaser release            upload.sh <product>                 serveur (publish)
-──────────────────            ───────────────────                 ─────────────────
-dist/*.tar.gz, *.zip, …  ───▶ PUT chaque fichier ──────────────▶ staging
-dist/metadata.json       ───▶ PUT                                  │
-registry.yaml            ───▶ PUT (obligatoire)                    │
-dist/CHANGELOG.md        ───▶ PUT (s'il existe)                    │
-dist/artifacts.json      ───▶ PUT en dernier                       │
-                              POST …/publish ─────────────────▶ vérifie, puis écrit
-                                                                  release.json (dans la version)
-                                                                  index.json (réécrit)
+Le standard s'appuie sur ce que produit [goreleaser](https://goreleaser.com) (`artifacts.json`, `metadata.json`, un fichier de checksums) mais ne l'exige pas : `registry.yaml` et les fichiers suffisent, le serveur déduit le reste.
+
+```mermaid
+flowchart LR
+    T["Équipe ou CI"] -- "PUT des fichiers<br/>registry.yaml<br/>CHANGELOG.md (facultatif)<br/>artifacts.json, metadata.json (facultatifs)" --> S[("staging")]
+    T -- "POST publish" --> S
+    S -- "contrôles (section 8)" --> V[("&lt;product&gt;/&lt;version&gt;/<br/>+ release.json")]
+    V --> I["&lt;product&gt;/index.json"]
 ```
 
-Sans goreleaser, `upload.sh <product> DIR` envoie chaque fichier de `DIR`, puis `registry.yaml` : le serveur déduit ce qu'`artifacts.json` et `metadata.json` auraient dit (section 3) et écrit `checksums.txt`.
+## 3. `registry.yaml` : la fiche produit
 
----
-
-## 1. `registry.yaml` : la fiche produit
-
-Le fichier se trouve à la racine du projet. `upload.sh` l'envoie s'il existe (`--product-file` permet d'indiquer un autre chemin). Comme il est envoyé avec chaque version, la fiche suit le code, et chaque version garde la fiche avec laquelle elle a été publiée.
+L'équipe écrit ce fichier et l'envoie avec chaque version : chaque version garde ainsi la fiche avec laquelle elle a été publiée.
 
 ```yaml
 apiVersion: local-registry/v1
 displayName: SonarBridge
 description: Pont entre SonarQube et les outils internes.
-license: Proprietary                  # identifiant SPDX (MIT, Apache-2.0…) ou "Proprietary"
+license: Apache-2.0
 owners:
-  - name: Équipe Plateforme
+  - name: Équipe plateforme
     email: platform@corp.example
 links:
   - { name: source, url: https://git.corp.example/platform/sonarbridge }
-  - { name: docs,   url: https://docs.corp.example/sonarbridge }
+  - { name: docs, url: https://docs.corp.example/sonarbridge }
 keywords: [sonar, cli]
-labels:                               # clé/valeur libres
-  domain: qualité
+labels:
+  domain: quality
   cost-center: "4512"
-install: |                            # markdown, affiché tel quel
-  curl -fsSL https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/… | tar xz
-deprecated: false                     # ou un message : "remplacé par sonarbridge2"
+install: |
+  curl -fsSL https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz | tar xz
+deprecated: false
 ```
 
-| Champ | Type | Obligatoire | Règle |
+| Champ | Type | Obligatoire | Contrainte |
 | --- | --- | --- | --- |
-| `apiVersion` | chaîne | **oui** | `local-registry/v1` |
-| `displayName` | chaîne | non | ≤ 100 caractères. Par défaut : `project_name` de `metadata.json`, sinon le nom du produit |
-| `description` | chaîne | non | ≤ 500 caractères |
-| `license` | chaîne | non | — |
-| `owners[]` | `{name, email?}` | non | `name` non vide ; `email` contient `@` |
-| `links[]` | `{name, url}` | non | `name` non vide ; `url` en `http(s)://hôte…` |
-| `keywords[]` | chaînes | non | ≤ 20, aucun vide |
-| `labels` | dictionnaire de chaînes | non | ≤ 50 entrées ; nombres et booléens lus comme des chaînes |
-| `install` | chaîne | non | ≤ 10 Kio |
-| `deprecated` | booléen ou chaîne | non | `false` par défaut. Une chaîne vide vaut `false` |
+| `apiVersion` | chaîne | **oui** | exactement `local-registry/v1` |
+| `displayName` | chaîne | non | au plus 100 caractères |
+| `description` | chaîne | non | au plus 500 caractères |
+| `license` | chaîne | non | un [identifiant SPDX](https://spdx.org/licenses/) ou `Proprietary` **DEVRAIT** être utilisé |
+| `owners[]` | objet `{name, email}` | non | `name` non vide ; `email`, s'il est présent, contient `@` |
+| `links[]` | objet `{name, url}` | non | `name` non vide ; `url` absolue, en `http` ou `https`, avec un hôte |
+| `keywords[]` | chaîne | non | au plus 20 ; aucun vide |
+| `labels` | table de chaînes | non | au plus 50 entrées ; les nombres et booléens sont lus comme des chaînes |
+| `install` | chaîne | non | au plus 10 Kio ; Markdown, affiché tel quel |
+| `deprecated` | booléen ou chaîne | non | `false` (défaut), `true`, ou un message comme `replaced by sonarbridge2` ; une chaîne vide vaut `false` |
 
-**Validation.** Elle a lieu au `PUT …/files/registry.yaml`, et un fichier invalide reçoit `422 registry.yaml: <raison>` :
+Un serveur **DOIT** refuser, en `422`, un `registry.yaml` qui :
 
-- Une clé inconnue est refusée, pour qu'une faute de frappe ne passe pas inaperçue. C'est aussi le cas de `changes` : les notes de version viennent de `CHANGELOG.md`.
-- Le fichier fait au plus 64 Kio et contient un seul document YAML.
-- [`schema/registry.schema.json`](schema/registry.schema.json) (JSON Schema 2020-12) permet de vérifier le fichier en CI avant l'envoi. Par exemple, avec [check-jsonschema](https://github.com/python-jsonschema/check-jsonschema) : `check-jsonschema --schemafile schema/registry.schema.json registry.yaml`.
+- dépasse 64 Kio, ou contient plus d'un document YAML ;
+- a un `apiVersion` autre que `local-registry/v1` ;
+- contient une clé absente du tableau (une faute de frappe ne passe pas inaperçue ; les notes de version ne s'écrivent pas ici) ;
+- enfreint une contrainte du tableau.
 
-**Obligatoire.** Chaque version a besoin de sa fiche : publier sans elle répond `422 registry.yaml not uploaded: every version needs its product card`.
+Le serveur vérifie le fichier à son envoi. [`schema/registry.schema.json`](schema/registry.schema.json) (JSON Schema 2020-12) exprime les mêmes règles : un pipeline peut ainsi vérifier le fichier avant de l'envoyer.
 
-## 2. `CHANGELOG.md` : les notes de version
+## 4. `CHANGELOG.md` : les notes de version
 
-goreleaser écrit ses notes de version dans `dist/CHANGELOG.md` ; sans goreleaser, l'équipe en écrit un. `upload.sh` envoie ce fichier s'il existe. Le serveur le vérifie à l'upload (≤ 1 Mio, UTF-8), puis le transforme en `changes` à la publication. Deux formes sont lues, et peuvent se mêler.
+Les notes d'une version viennent de son `CHANGELOG.md`. Un serveur **DOIT** refuser, en `422`, un `CHANGELOG.md` de plus de 1 Mio ou qui n'est pas en UTF-8 valide. À la publication, il transforme le fichier en `changes` (section 5). Deux formes sont lues, et **PEUVENT** se mêler dans un même fichier.
 
-**Keep a Changelog.** Chaque élément de liste sous un titre `### Added`, `### Changed`, `### Deprecated`, `### Removed`, `### Fixed` ou `### Security` (toute casse) est une note de ce type, son texte tel quel. Si le fichier a des titres de version (`## [1.2.0] - 2026-10-18`, `## v1.2.0`, `## [Unreleased]`), seule la section de la version publiée est lue, avec ou sans son `v` ; une version sans section n'a pas de notes. Sans titres de version, tout le fichier est lu.
+### 4.1 Keep a Changelog
+
+Chaque élément de liste (`- …` ou `* …`) sous un titre de niveau 3 `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed` ou `Security` (casse indifférente) est une note de ce type, son texte pris tel quel. Ces titres ne sont reconnus qu'en anglais.
+
+Si le fichier a des titres de version, c'est-à-dire des titres de niveau 2 comme `## [1.2.0] - 2026-10-18`, `## v1.2.0` ou `## [Unreleased]`, seule la section de la version publiée est lue, le `v` initial étant ignoré des deux côtés. Une version sans section propre n'a aucune note. Un fichier sans titre de version est lu en entier.
 
 ```markdown
 ## [1.0.0] - 2026-10-18
 ### Added
-- orders table
+- table des commandes
 ### Security
-- no default password
+- plus de mot de passe par défaut
 ```
 
-**goreleaser.** Chaque autre élément de liste (`* …` ou `- …`) dont le message est un [Conventional Commit](https://www.conventionalcommits.org/fr/) donne une note. Avant l'analyse, le serveur retire les ajouts de goreleaser : le sha du commit en tête, et l'auteur en fin de ligne, comme ` (@user)`, ` (Nom <mail>)` ou ` by @user in <url>`. Tout le reste est ignoré : les titres, `**Full Changelog**` et les messages sans type connu.
+### 4.2 Conventional Commits (goreleaser)
+
+Chaque autre élément de liste dont le message est un [Conventional Commit](https://www.conventionalcommits.org/) d'un type connu donne une note. Avant l'analyse, le sha de commit en tête (`9c9d766`, `9c9d766:`) et l'auteur en fin (` (@user)`, ` (Nom <mail>)`, ` by @user in <url>`) sont retirés. Les titres, les lignes `**Full Changelog**` et les autres messages sont ignorés.
 
 | Type de commit | `kind` |
 | --- | --- |
@@ -101,17 +130,17 @@ goreleaser écrit ses notes de version dans `dist/CHANGELOG.md` ; sans gorelease
 | `perf`, `refactor`, `change` | `changed` |
 | `deprecate`, `deprecated` | `deprecated` |
 | `remove`, `removed` | `removed` |
-| `sec`, `security`, ou tout type de portée `security`/`sec` (`fix(security): …`) | `security` |
-| tout autre type marqué cassant (`chore!: …`) | `changed` |
-| `docs`, `test`, `chore`, `ci`, `build`, `style`… | pas une note |
+| `sec`, `security`, ou tout type de portée `security` ou `sec` | `security` |
+| tout autre type marqué incompatible (`chore!: …`) | `changed` |
+| tout autre type (`docs`, `test`, `chore`, `ci`…) | pas une note |
 
-`* 9c9d766: feat(api): export CSV (@alice)` devient `{"kind": "added", "description": "export CSV"}`.
+Exemple : `* 9c9d766: feat(api): CSV export (@alice)` donne `{"kind": "added", "description": "CSV export"}`.
 
-Utilisez `changelog.use: git` ou `github` dans `.goreleaser.yaml`, et gardez les préfixes `feat:`, `fix:`… dans les messages : si les `filters` de goreleaser les retirent, il ne reste rien à lire. Sans `CHANGELOG.md`, `changes` vaut `[]`.
+Sans `CHANGELOG.md`, `changes` vaut `[]`.
 
-## 3. `release.json` : une version
+## 5. `release.json` : une version
 
-Il est généré à la publication, dans la version en staging. Il apparaît donc en même temps que la version, et il est immuable comme les autres fichiers. Il est servi par `GET /{product}/releases/{version}` et par `GET /{product}/artifacts/{version}/files/release.json`.
+Le serveur écrit `release.json` à la publication, dans la version déposée : il apparaît avec la version et il est immuable comme tous ses fichiers.
 
 ```json
 {
@@ -122,15 +151,15 @@ Il est généré à la publication, dans la version en staging. Il apparaît don
   "tag": "v1.4.2",
   "previousTag": "v1.4.1",
   "prerelease": false,
-  "commit": "9c9d7664ceef…",
+  "commit": "9c9d7664ceefa1b2…",
   "builtAt": "2026-10-10T20:01:27+02:00",
   "publishedAt": "2026-10-10T18:05:02Z",
   "publishedBy": "e2186dbdb1bb",
   "deprecated": false,
   "securityUpdates": true,
   "changes": [
-    { "kind": "added", "description": "export CSV" },
-    { "kind": "security", "description": "golang.org/x/net mis à jour" }
+    { "kind": "added", "description": "CSV export" },
+    { "kind": "security", "description": "bump golang.org/x/net" }
   ],
   "artifacts": [
     {
@@ -144,88 +173,116 @@ Il est généré à la publication, dans la version en staging. Il apparaît don
       "size": 4821337,
       "sha256": "3f1c…",
       "url": "https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz",
-      "sbom": "https://…/files/sonarbridge_1.4.2_linux_amd64.tar.gz.sbom.json",
+      "sbom": "https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz.sbom.json",
       "signature": null,
       "certificate": null
-    },
-    {
-      "name": "migrations.sql",
-      "kind": "file",
-      "format": "sql",
-      "mediaType": "application/sql",
-      "os": null, "arch": null, "variant": null,
-      "size": 18213,
-      "sha256": "9ab0…",
-      "url": "https://…/files/migrations.sql",
-      "sbom": null, "signature": null, "certificate": null
     }
   ],
   "checksums": {
     "name": "sonarbridge_1.4.2_checksums.txt",
-    "url": "https://…/files/sonarbridge_1.4.2_checksums.txt",
-    "signature": "https://…/files/sonarbridge_1.4.2_checksums.txt.sigstore.json",
+    "url": "https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_checksums.txt",
+    "signature": null,
     "certificate": null
   }
 }
 ```
 
-Toutes les clés sont toujours présentes. Une valeur inconnue vaut `null`, et la clé n'est jamais absente.
+Chaque clé **DOIT** être présente. Une valeur inconnue vaut `null`, jamais une clé absente.
 
-| Champ | Source |
-| --- | --- |
-| `product`, `version` | les segments `{product}` et `{version}` de l'URL de publication |
-| `displayName` | `registry.yaml`, sinon `project_name` de `metadata.json`, sinon le produit |
-| `tag`, `previousTag`, `commit`, `builtAt` | `metadata.json` : `tag`, `previous_tag`, `commit`, `date` ; `null` sans lui |
-| `prerelease` | `version` est une pré-version semver (`v1.5.0-rc.1`) |
-| `publishedAt` | horloge du serveur à la publication, en UTC, au format RFC 3339 |
-| `publishedBy` | `token_id` du token d'upload (les 12 premiers chiffres hexadécimaux de son sha256), jamais le token |
-| `deprecated` | `registry.yaml`, `false` par défaut |
-| `changes` | `CHANGELOG.md` (section 2) |
-| `securityUpdates` | `true` si une note est de type `security` |
-| `artifacts[]` | les entrées publiées d'`artifacts.json` qui sont des fichiers à part entière (ci-dessous) ; sans lui, déduites des noms de fichiers (ci-dessous) |
-| `size`, `sha256` | calculés par le serveur : identiques au fichier de checksums |
-| `url` | `GET /{product}/artifacts/{version}/files/{name}`, absolue sous `--public-url`, sinon relative |
-| `checksums` | l'entrée `Checksum` d'`artifacts.json`, sinon le `*checksums.txt` envoyé, sinon le `checksums.txt` écrit par la publication |
+### 5.1 Champs
 
-### Types (`kind`)
-
-| Type goreleaser | `kind` | Remarque |
+| Champ | Type | Valeur |
 | --- | --- | --- |
-| `Archive` | `archive` | `format` : `tar.gz`, `zip`… |
-| `Binary` avec `extra.Format` | `binary` | binaire publié sans archive |
-| `Linux Package` | `package` | `format` : `deb`, `rpm`, `apk`, `archlinux` |
-| `File` (`release.extra_files`) | `file` | tout autre fichier : configs, scripts SQL, PDF, charts Helm… |
-| `Source` | `source` | archive des sources |
-| `Checksum` | — | remplit `checksums` |
-| `SBOM` | — | rattaché comme `sbom` à `<name>` s'il s'appelle `<name>.sbom.json`, `.spdx.json`, `.cdx.json` ou `.sbom` |
-| `Signature` | — | rattachée comme `signature` à `<name>` (ou au fichier de checksums) si elle s'appelle `<name>.sigstore.json`, `.bundle` ou `.sig` |
-| `Certificate` | — | rattaché comme `certificate` de la même façon, pour `<name>.pem`, `.crt` ou `.cert` |
-| `Metadata` | — | `metadata.json` : ses valeurs deviennent des champs de la version |
-| `Binary` sans `Format` | ignoré | sortie de build, comme partout ailleurs |
+| `apiVersion` | chaîne | `local-registry/v1` |
+| `product`, `version` | chaîne | les segments `{product}` et `{version}` de l'URL de publication |
+| `displayName` | chaîne | `displayName` de `registry.yaml`, sinon `project_name` de `metadata.json`, sinon `product` |
+| `tag`, `previousTag`, `commit`, `builtAt` | chaîne ou null | `tag`, `previous_tag`, `commit` et `date` de `metadata.json` ; `null` sans lui ou s'ils sont vides |
+| `prerelease` | booléen | `version` est une version sémantique avec une partie pré-version (`v1.5.0-rc.1`) |
+| `publishedAt` | chaîne | heure de publication, UTC, RFC 3339 |
+| `publishedBy` | chaîne | `token_id` du token d'upload : les 12 premiers chiffres hexadécimaux de son sha256. Jamais le token. |
+| `deprecated` | booléen ou chaîne | `deprecated` de `registry.yaml` |
+| `securityUpdates` | booléen | `true` si une note de `changes` est de type `security` |
+| `changes[]` | `{kind, description}` | issu de `CHANGELOG.md` (section 4) ; `kind` vaut `added`, `changed`, `deprecated`, `removed`, `fixed` ou `security` |
+| `artifacts[]` | objet | les artefacts de la version (5.2), dans l'ordre d'`artifacts.json`, sinon par nom |
+| `checksums` | objet ou null | le fichier de checksums : `{name, url, signature, certificate}` |
 
-Une pièce jointe qui ne couvre aucun fichier listé reste téléchargeable, mais n'apparaît dans aucune entrée de `artifacts[]`. Si un fichier a deux pièces jointes du même type, la première dans `artifacts.json` l'emporte.
+Champs d'une entrée de `artifacts[]` :
 
-- **`format`** : `extra.Format` quand goreleaser le renseigne, sinon l'extension du fichier (`tar.gz`, `tar.xz`, `tar.zst` et `tar.bz2` comptent comme une seule extension), sinon `null`.
-- **`mediaType`** : tiré d'une table fixe, d'après la fin du nom, sans tenir compte de la casse : `.tar.gz`/`.tgz`/`.gz` `application/gzip`, `.xz` `application/x-xz`, `.zst` `application/zstd`, `.tar` `application/x-tar`, `.zip` `application/zip`, `.deb` `application/vnd.debian.binary-package`, `.rpm` `application/x-rpm`, `.exe` `application/vnd.microsoft.portable-executable`, `.msi` `application/x-msi`, `.dmg` `application/x-apple-diskimage`, `.pdf` `application/pdf`, `.sql` `application/sql`, `.yaml`/`.yml` `application/yaml`, `.json` `application/json`, `.sh` `application/x-sh`, `.md` `text/markdown`, `.txt` `text/plain`. Tout le reste donne `application/octet-stream`.
-- **`os`, `arch`, `variant`** : tirés de `goos`, de `goarch` et du premier champ renseigné parmi `goamd64`, `goarm`, `goarm64`, `go386`, `gomips`, `goppc64` et `goriscv64`. Ils valent `null` pour un fichier qui ne dépend pas d'une plateforme.
+| Champ | Type | Valeur |
+| --- | --- | --- |
+| `name` | chaîne | nom du fichier |
+| `kind` | chaîne | `archive`, `binary`, `package`, `file` ou `source` (5.2) |
+| `format` | chaîne ou null | `extra.Format` d'`artifacts.json`, sinon l'extension sans son point (`tar.gz`, `tar.xz`, `tar.zst` et `tar.bz2` comptent pour une), sinon `null` |
+| `mediaType` | chaîne | déduit du nom (5.3) |
+| `os`, `arch` | chaîne ou null | `goos` et `goarch` d'`artifacts.json` ; `null` pour un fichier qui ne dépend d'aucune plateforme |
+| `variant` | chaîne ou null | le premier non vide parmi `goamd64`, `goarm`, `goarm64`, `go386`, `gomips`, `goppc64`, `goriscv64` |
+| `size`, `sha256` | entier, chaîne | calculés par le serveur sur le fichier stocké |
+| `url` | chaîne | URL de téléchargement `/{product}/artifacts/{version}/files/{name}`, absolue quand le serveur connaît son URL publique, relative sinon |
+| `sbom`, `signature`, `certificate` | chaîne ou null | URL de la pièce jointe qui couvre ce fichier |
 
-### Sans `artifacts.json`
+### 5.2 Artefacts et pièces jointes
 
-Chaque fichier en staging reçoit un type d'après son nom, puis suit le tableau ci-dessus. `registry.yaml`, `CHANGELOG.md`, `metadata.json` et les fichiers écrits par le serveur ne sont pas des entrées.
+Avec un `artifacts.json`, chaque entrée publiée est classée selon son `type` goreleaser :
 
-| Nom | Type |
+| `type` | Résultat |
 | --- | --- |
-| le fichier de checksums | `Checksum` |
-| `<autre fichier en staging>` + un suffixe de SBOM, signature ou certificat (ci-dessus) | `SBOM`, `Signature`, `Certificate` |
-| `.tar.gz`, `.tgz`, `.tar.xz`, `.tar.zst`, `.tar.bz2`, `.tar`, `.zip` | `Archive` |
-| `.deb`, `.rpm`, `.apk` | `Linux Package` |
-| tout le reste | `File` |
+| `Archive` | artefact, kind `archive` |
+| `Binary` avec `extra.Format` | artefact, kind `binary` |
+| `Linux Package` | artefact, kind `package` |
+| `File` | artefact, kind `file` |
+| `Source` | artefact, kind `source` |
+| `Checksum` | `checksums` |
+| `SBOM`, `Signature`, `Certificate` | pièce jointe |
+| `Metadata` | non listé (ses valeurs remplissent les champs de la version) |
+| `Binary` sans `extra.Format` | ignoré : un résultat de compilation, pas un fichier publié |
 
-`os`, `arch` et `variant` valent `null` : pour les donner, envoyez un `artifacts.json`, écrit à la main au besoin (`name`, `path`, `type`, `goos`, `goarch`).
+Sans `artifacts.json`, chaque fichier stocké autre que `registry.yaml`, `CHANGELOG.md`, `metadata.json` et les fichiers écrits par le serveur est classé selon son nom :
 
-**Produits qui ne sont pas des binaires.** Envoyez les fichiers avec `registry.yaml` (`upload.sh <product> DIR`), ou utilisez goreleaser avec `builds: [{ skip: true }]` et `release.extra_files`.
+| Nom | Résultat |
+| --- | --- |
+| le fichier de checksums | `checksums` |
+| le nom d'un autre fichier stocké suivi d'un suffixe de pièce jointe | pièce jointe |
+| finit par `.tar.gz`, `.tgz`, `.tar.xz`, `.tar.zst`, `.tar.bz2`, `.tar` ou `.zip` | artefact, kind `archive` |
+| finit par `.deb`, `.rpm` ou `.apk` | artefact, kind `package` |
+| tout autre nom | artefact, kind `file` |
 
-## 4. `index.json` : un produit et ses versions
+Dans ce cas `os`, `arch` et `variant` valent `null`. Un éditeur qui en a besoin **DOIT** envoyer un `artifacts.json`, qui **PEUT** être écrit à la main (`name`, `path`, `type`, `goos`, `goarch`).
+
+Une pièce jointe nommée `<nom><suffixe>` couvre l'artefact `<nom>`, ou le fichier de checksums quand `<nom>` est le sien :
+
+| Pièce jointe | Suffixes |
+| --- | --- |
+| `sbom` | `.sbom.json`, `.spdx.json`, `.cdx.json`, `.sbom` |
+| `signature` | `.sigstore.json`, `.bundle`, `.sig` |
+| `certificate` | `.pem`, `.crt`, `.cert` |
+
+Quand un fichier a deux pièces jointes du même type, la première l'emporte. Une pièce jointe qui ne couvre aucun fichier reste téléchargeable mais n'apparaît dans aucune entrée.
+
+### 5.3 Types de média
+
+Le type de média se déduit de la fin du nom, casse ignorée, premier suffixe trouvé. Tout autre nom donne `application/octet-stream`.
+
+| Suffixe | `mediaType` |
+| --- | --- |
+| `.tar.gz`, `.tgz`, `.gz` | `application/gzip` |
+| `.tar.xz`, `.xz` | `application/x-xz` |
+| `.tar.zst`, `.zst` | `application/zstd` |
+| `.tar` | `application/x-tar` |
+| `.zip` | `application/zip` |
+| `.deb` | `application/vnd.debian.binary-package` |
+| `.rpm` | `application/x-rpm` |
+| `.exe` | `application/vnd.microsoft.portable-executable` |
+| `.msi` | `application/x-msi` |
+| `.dmg` | `application/x-apple-diskimage` |
+| `.pdf` | `application/pdf` |
+| `.sql` | `application/sql` |
+| `.yaml`, `.yml` | `application/yaml` |
+| `.json` | `application/json` |
+| `.sh` | `application/x-sh` |
+| `.md` | `text/markdown` |
+| `.txt` | `text/plain` |
+
+## 6. `index.json` : un produit et ses versions
 
 ```json
 {
@@ -233,14 +290,14 @@ Chaque fichier en staging reçoit un type d'après son nom, puis suit le tableau
   "product": "sonarbridge",
   "displayName": "SonarBridge",
   "description": "Pont entre SonarQube et les outils internes.",
-  "license": "Proprietary",
-  "owners": [{ "name": "Équipe Plateforme", "email": "platform@corp.example" }],
+  "license": "Apache-2.0",
+  "owners": [{ "name": "Équipe plateforme", "email": "platform@corp.example" }],
   "links": [{ "name": "source", "url": "https://git.corp.example/platform/sonarbridge" }],
   "keywords": ["sonar", "cli"],
-  "labels": { "domain": "qualité" },
+  "labels": { "domain": "quality" },
   "install": "…",
   "latest": "v1.4.2",
-  "updatedAt": "2026-10-10T18:05:02Z",
+  "updatedAt": "2026-10-12T08:00:00Z",
   "versions": [
     { "version": "v1.5.0-rc.1", "tag": "v1.5.0-rc.1", "publishedAt": "2026-10-12T08:00:00Z", "prerelease": true, "securityUpdates": false, "deprecated": false },
     { "version": "v1.4.2", "tag": "v1.4.2", "publishedAt": "2026-10-10T18:05:02Z", "prerelease": false, "securityUpdates": true, "deprecated": false }
@@ -248,40 +305,55 @@ Chaque fichier en staging reçoit un type d'après son nom, puis suit le tableau
 }
 ```
 
-- **Versions.** Seules les versions qui ont un `release.json` sont listées. Les versions publiées avant ce standard ne sont pas converties : elles restent téléchargeables par les routes existantes. Les versions semver viennent en premier, de la plus récente à la plus ancienne. Les autres noms suivent, du `publishedAt` le plus récent au plus ancien.
-- **`latest`.** C'est la même règle que partout ailleurs : `publish?latest=true` copie le `release.json` de la version dans `<product>/release.json`, et la version latest est la `version` qu'il nomme, si elle a un `release.json`. Il vaut `null` sinon. Pour le changer à la main, copiez `<version>/release.json` dans `<product>/release.json`.
-- **Fiche.** Elle vient du `registry.yaml` de la version `latest`, sinon de la dernière version publiée. Sans fiche, les champs texte valent `""` et les listes `[]`. `displayName` est celui du `release.json` de cette version.
-- **`updatedAt`.** Le `publishedAt` le plus récent.
-- **Fraîcheur.** Le fichier est réécrit de façon atomique après chaque publication du produit. `GET /{product}/index` ne le relit pas : il reconstruit l'index depuis le disque à chaque requête, si bien qu'un `latest` changé à la main se voit tout de suite.
+- **`versions[]`** liste toutes les versions du produit qui ont un `release.json`, avec les champs de même nom de ce document. Les versions sémantiques viennent d'abord, de la plus haute à la plus basse selon la précédence semver ; les autres noms suivent, du `publishedAt` le plus récent au plus ancien.
+- **`latest`** est la dernière version, ou `null`. Une publication avec `latest=true` copie le `release.json` de la version dans `<product>/release.json` ; la dernière version est la `version` que nomme cette copie, à condition que `<product>/<version>/release.json` existe. Un exploitant la change en y copiant le `release.json` d'une autre version.
+- **La fiche** (`displayName`, `description`, `license`, `owners`, `links`, `keywords`, `labels`, `install`) vient du `registry.yaml` de la dernière version, sinon de la version publiée en dernier. Les valeurs absentes valent `""` pour les chaînes, `[]` ou `{}` pour les listes et les tables. `displayName` est celui du `release.json` de cette version.
+- **`updatedAt`** est le `publishedAt` le plus récent.
 
-## 5. Routes
+Le serveur réécrit `index.json` après chaque publication du produit. Un serveur **PEUT** construire l'index à partir de son stockage à chaque requête au lieu de relire le fichier ; ce serveur le fait, si bien qu'un latest changé à la main se voit aussitôt.
 
-Ces routes sont en lecture seule, sans token, et répondent aussi à `HEAD`. Les erreurs sont au format `{"error": "…"}`.
+## 7. Routes
+
+Ces routes sont en lecture seule et ne demandent aucun token. Elles répondent à `GET` et `HEAD`. Une erreur est un objet JSON `{"error": "<message>"}`.
 
 | Route | Réponse | Erreurs |
 | --- | --- | --- |
-| `GET /products` | `[{product, displayName, description, latest, updatedAt}]`, par nom ; `[]` si vide | — |
-| `GET /{product}/index` | l'index (section 4) | `404` si aucune version n'a de `release.json` |
-| `GET /{product}/releases/{version}` | `release.json` ; `latest` est accepté | `404` s'il n'existe pas |
+| `GET /products` | tableau de `{product, displayName, description, latest, updatedAt}`, par nom de produit ; `[]` s'il n'y en a aucun | aucune |
+| `GET /{product}/index` | l'index (section 6) | `404` si aucune version du produit n'a de `release.json` |
+| `GET /{product}/releases/{version}` | le `release.json` de la version ; `{version}` **PEUT** valoir `latest` | `404` s'il n'existe pas |
+| `GET /{product}/artifacts/{version}/files/{name}` | un fichier d'une version publiée | `404` s'il n'existe pas |
 
-`GET /{product}/releases/{version}` et `POST /releases/{product}/{version}` (les fichiers d'une version) sont deux routes distinctes. `POST /releases/{version}`, qui suppose le produit `gitlab`, est **dépréciée** : elle répond avec les en-têtes `Deprecation: true` et `Link: </releases/gitlab/{version}>; rel="successor-version"`, et sera retirée dans une prochaine version majeure.
+Les autres routes du serveur (upload, `artifacts.json`, routes historiques) ne font pas partie du standard ; la [référence de l'API HTTP](website/i18n/fr/docusaurus-plugin-content-docs/current/reference/api/index.md) les décrit.
 
-## 6. Règles d'upload
+## 8. Règles de publication
 
-| Règle | Réponse |
+Un serveur conforme ne publie une version que si toutes les règles suivantes sont respectées, et répond sinon avec le statut indiqué. Rien n'est publié en cas de refus ; les fichiers déposés sont conservés.
+
+| Règle | Statut en cas de manquement |
 | --- | --- |
-| Produit nommé `products` | `400 product name products is reserved` |
-| Version nommée `artifacts.json`, `artifacts.goreleaser.json`, `release.json` ou `index.json` | `400 version name <nom> is reserved` |
-| `PUT` de `release.json`, `index.json` ou `artifacts.goreleaser.json` | `400 <name> is reserved: publishing writes it` |
-| `artifacts.json` liste l'un de ces noms | `422` |
-| `registry.yaml` invalide | `422 registry.yaml: <raison>` |
-| `CHANGELOG.md` de plus de 1 Mio, ou pas en UTF-8 | `422` |
-| Publication sans `registry.yaml` | `422 registry.yaml not uploaded: every version needs its product card` |
-| Publication sans artefact (aucun fichier hors `registry.yaml`, `CHANGELOG.md`, `metadata.json`, checksums, pièces jointes) | `422 no artifact to publish: upload at least one file besides registry.yaml` |
-| Plusieurs `*checksums.txt` | `422 several checksums files: a and b` |
+| Les noms de produit et de version sont valides (section 1). | `400` |
+| Aucun fichier envoyé ne s'appelle `release.json`, `index.json` ou `artifacts.goreleaser.json`, et `artifacts.json` n'en liste aucun. | `400` à l'envoi, `422` dans `artifacts.json` |
+| `registry.yaml` est envoyé et valide (section 3). | `422` |
+| `CHANGELOG.md`, s'il est envoyé, est valide (section 4). | `422` |
+| Au plus un fichier dont le nom finit par `checksums.txt` (casse indifférente) est envoyé. | `422` |
+| Avec un fichier de checksums : chaque fichier stocké y figure avec son sha256, sauf `registry.yaml`, `CHANGELOG.md`, `metadata.json`, les fichiers écrits par le serveur et les signatures (`*.sig`, `*.pem`, `*.sigstore.json`). | `422` |
+| Avec `metadata.json` : il contient `tag` ou `version`, et `{version}` vaut `tag`, `version` ou `v` suivi de `version`. | `422` |
+| Avec `artifacts.json` : chaque fichier qu'il publie est stocké, avec le sha256 que donne son `extra.Checksum` ; chaque fichier stocké sauf `registry.yaml`, `CHANGELOG.md` et `metadata.json` est l'une de ses entrées. | `422` |
+| La version a au moins un artefact (section 5.2). | `422` |
+| La version n'est pas déjà publiée. | `409` |
 
-`artifacts.json`, `metadata.json` et le fichier de checksums sont facultatifs ; chacun, s'il est envoyé, est vérifié comme avant. Avec un fichier de checksums, chaque fichier en staging doit y figurer, sauf `registry.yaml`, `CHANGELOG.md`, `metadata.json`, les fichiers écrits par le serveur et les signatures (`*.sig`, `*.pem`, `*.sigstore.json`). Avec `artifacts.json`, chaque fichier en staging sauf `registry.yaml`, `CHANGELOG.md` et `metadata.json` doit en être une entrée. Sans fichier de checksums, la publication écrit `checksums.txt` au même format (`<sha256>  <nom>`, par nom) pour les fichiers qui auraient dû y figurer.
+Sans fichier de checksums, le serveur **DOIT** écrire `checksums.txt` au même format : une ligne `<sha256>  <nom>` par fichier qui en demande une, triées par nom. La version apparaît alors entière, en une seule étape, avec son `release.json`, et `index.json` est réécrit.
 
-## 7. Versions du standard
+## 9. Conformité des clients
 
-`apiVersion` ne change (`local-registry/v2`) que pour une évolution incompatible : un champ retiré ou renommé, ou un type ou un sens modifié. Ajouter un champ, un `kind`, un type de média ou un type de commit garde `v1`. Les clients doivent donc ignorer les champs qu'ils ne connaissent pas.
+Un client de ce standard :
+
+- **DOIT** ignorer les champs qu'il ne connaît pas, dans tous les documents (section 10) ;
+- **DOIT** traiter `null` comme « inconnu », sans s'attendre à une clé absente ;
+- **DEVRAIT** lire `release.json` et `index.json` plutôt que deviner des noms de fichiers ou lire `artifacts.json`, qui n'existe que pour les versions publiées avec ;
+- **DEVRAIT** vérifier chaque fichier téléchargé avec le `sha256` de son entrée `artifacts[]` ;
+- **NE DEVRAIT PAS** dépendre de l'ordre de `artifacts[]`, `changes[]` ou `labels`.
+
+## 10. Versionnement du standard
+
+`apiVersion` ne change (`local-registry/v2`) que pour une évolution incompatible : un champ supprimé ou renommé, ou le type ou le sens d'un champ modifié. Ajouter un champ, un `kind`, un type de média, un suffixe ou un type de commit reste compatible et garde `local-registry/v1`.
