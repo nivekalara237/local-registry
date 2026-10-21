@@ -62,7 +62,7 @@ jobs:
       - name: image build context (same layout as goreleaser dockers_v2)
         run: |
           mkdir -p ctx/linux/amd64 ctx/linux/arm64
-          cp Dockerfile ctx/
+          cp Dockerfile LICENSE NOTICE ctx/
           cp dist/local-registry_linux_amd64_v1/local-registry ctx/linux/amd64/
           cp dist/local-registry_linux_arm64_v8.0/local-registry ctx/linux/arm64/
       - name: build image linux/arm64
