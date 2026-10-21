@@ -28,6 +28,8 @@ archives:
         formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
+      - LICENSE
+      - NOTICE
       - README.md
       - README.fr.md
       - SPEC.md
@@ -55,6 +57,7 @@ dockers_v2:
   - id: docker-image
     ids: [local-registry]
     dockerfile: Dockerfile
+    extra_files: [LICENSE, NOTICE]
     images:
       - "docker.io/{{ .Env.DOCKERHUB_USERNAME }}/local-registry"
       - "ghcr.io/nivekalara237/local-registry" # owner must be lowercase
@@ -66,7 +69,8 @@ dockers_v2:
     sbom: true
     labels:
       org.opencontainers.image.title: local-registry
-      org.opencontainers.image.description: Lightweight Local HTTP Registry for GoReleaser releases
+      org.opencontainers.image.description: Lightweight private HTTP registry for releases, builds and any versioned files
+      org.opencontainers.image.licenses: Apache-2.0
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.revision: "{{ .FullCommit }}"
       org.opencontainers.image.name: "{{ .ProjectName }}"
@@ -88,6 +92,7 @@ changelog:
   filters:
     exclude:
       - "^docs:"
+      - "^website:"
       - "^test:"
       - "^chore:"
 

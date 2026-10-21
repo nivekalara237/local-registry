@@ -11,6 +11,7 @@ RUN apk add --no-cache ca-certificates tzdata \
  && chown registry:registry /data
 
 COPY ${TARGETPLATFORM}/local-registry /usr/local/bin/local-registry
+COPY LICENSE NOTICE /usr/share/licenses/local-registry/
 
 USER registry:registry
 ENV LOCAL_REGISTRY_ASSET_PATH=/data \
