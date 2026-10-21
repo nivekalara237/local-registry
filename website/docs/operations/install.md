@@ -24,7 +24,7 @@ Whatever the method, plan for three things:
 Every release on GitHub ships archives for Linux, macOS and Windows, on amd64 and arm64. Each archive holds the `local-registry` binary, the README, the `local-registry/v1` specification, the JSON schema of `registry.yaml`, the two upload scripts, and the `LICENSE` and `NOTICE` files.
 
 ```sh
-VERSION=1.0.0-rc.2                      # the release, without the leading v
+VERSION=1.0.0-rc.3                      # the release, without the leading v
 OS=linux ARCH=amd64                     # darwin or windows; arm64
 BASE=https://github.com/nivekalara237/local-registry/releases/download/v$VERSION
 
@@ -60,7 +60,7 @@ The image is published to the GitHub Container Registry and to Docker Hub for `l
 | `latest` | The newest stable release. Pre-releases (`-rc.N`) never move it. |
 
 > [!NOTE]
-> Until the first stable release, only exact pre-release tags such as `1.0.0-rc.2` exist.
+> Until the first stable release, only exact pre-release tags such as `1.0.0-rc.3` exist.
 
 The image sets these defaults through environment variables:
 
@@ -81,7 +81,7 @@ docker run -d --name local-registry --restart unless-stopped \
   -v /srv/registry:/data \
   -e LOCAL_REGISTRY_UPLOAD_TOKEN \
   -e LOCAL_REGISTRY_PUBLIC_URL=https://registry.example.com \
-  ghcr.io/nivekalara237/local-registry:1.0.0-rc.2
+  ghcr.io/nivekalara237/local-registry:1.0.0-rc.3
 ```
 
 `-e LOCAL_REGISTRY_UPLOAD_TOKEN` with no value copies the variable from your shell, so the token stays out of the command line and your shell history. It is still visible to anyone who can run `docker inspect`: restrict access to the Docker daemon.
@@ -95,7 +95,7 @@ docker run -d --name local-registry \
   -p 8077:8077 -v /srv/registry:/data \
   -v /etc/local-registry/config.yaml:/etc/local-registry/config.yaml:ro \
   -e LOCAL_REGISTRY_CONFIG=/etc/local-registry/config.yaml \
-  ghcr.io/nivekalara237/local-registry:1.0.0-rc.2
+  ghcr.io/nivekalara237/local-registry:1.0.0-rc.3
 ```
 
 ### Verify the image signature
@@ -103,7 +103,7 @@ docker run -d --name local-registry \
 Each release signs its images with a keyless Sigstore signature, issued to the release workflow of the GitHub repository. Verify an image before you deploy it:
 
 ```sh
-cosign verify ghcr.io/nivekalara237/local-registry:1.0.0-rc.2 \
+cosign verify ghcr.io/nivekalara237/local-registry:1.0.0-rc.3 \
   --certificate-identity-regexp 'https://github.com/nivekalara237/local-registry/.github/workflows/release.yml@.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -204,7 +204,7 @@ spec:
         seccompProfile: {type: RuntimeDefault}
       containers:
         - name: local-registry
-          image: ghcr.io/nivekalara237/local-registry:1.0.0-rc.2
+          image: ghcr.io/nivekalara237/local-registry:1.0.0-rc.3
           args: [serve]
           env:
             - name: LOCAL_REGISTRY_CONFIG

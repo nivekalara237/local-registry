@@ -10,11 +10,14 @@
     <img alt="coverage" src="https://codecov.io/gh/nivekalara237/local-registry/graph/badge.svg?token=3UEZCSODUL" />
   </a>
   <a href="https://github.com/nivekalara237/local-registry/actions/workflows/release.yml"><img alt="release" src="https://github.com/nivekalara237/local-registry/actions/workflows/release.yml/badge.svg" /></a>
-  <a href="https://github.com/nivekalara237/local-registry/actions/workflows/docs.yml"><img alt="docs" src="https://github.com/nivekalara237/local-registry/actions/workflows/docs.yml/badge.svg" /></a>
-  <a href="LICENSE"><img alt="licence" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" /></a>
+</p>
+<p align="center">
+    <a href="https://github.com/nivekalara237/local-registry/releases"><img alt="dernière version" src="https://img.shields.io/github/v/release/nivekalara237/local-registry?include_prereleases&sort=semver&display_name=tag&label=version" /></a>
+    <a href="https://github.com/nivekalara237/local-registry/actions/workflows/docs.yml"><img alt="docs" src="https://github.com/nivekalara237/local-registry/actions/workflows/docs.yml/badge.svg" /></a>
+    <a href="LICENSE"><img alt="licence" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" /></a>
 </p>
 
-<p align="center"><a href="README.md">English</a> | <b>Français</b></p>
+<p align="center"><a href="https://local-registry.nivekaa.com"><b>Documentation</b></a> | <a href="README.md">English</a></p>
 
 # local-registry
 
@@ -39,7 +42,7 @@ Lancez le serveur :
 export LOCAL_REGISTRY_UPLOAD_TOKEN="$(openssl rand -hex 32)"
 docker run -d --name local-registry -p 8077:8077 \
   -v local-registry-data:/data -e LOCAL_REGISTRY_UPLOAD_TOKEN \
-  ghcr.io/nivekalara237/local-registry:1.0.0-rc.2
+  ghcr.io/nivekalara237/local-registry:1.0.0-rc.3
 ```
 
 Publiez une version, depuis un clone de ce dépôt : une fiche produit et des fichiers.
@@ -65,25 +68,25 @@ Avec goreleaser, lancez `goreleaser release`, puis `scripts/upload.sh --latest <
 
 La documentation complète, en français et en anglais, se trouve dans [`website/`](website/README.md). C'est un site Docusaurus, et chaque page se lit aussi sur GitHub.
 
-| Je veux… | Lire |
-| --- | --- |
-| Comprendre le modèle | [Introduction](website/i18n/fr/docusaurus-plugin-content-docs/current/intro.md), [Staging et publication](website/i18n/fr/docusaurus-plugin-content-docs/current/concepts/staging-and-publish.md) |
-| Essayer en 5 minutes | [Démarrage rapide](website/i18n/fr/docusaurus-plugin-content-docs/current/getting-started/quick-start.md) |
-| Publier depuis goreleaser ou une CI | [Publier avec goreleaser](website/i18n/fr/docusaurus-plugin-content-docs/current/guides/publish-with-goreleaser.md), [Pipelines CI](website/i18n/fr/docusaurus-plugin-content-docs/current/guides/ci-pipelines.md) |
-| Publier des fichiers sans goreleaser | [Publier des fichiers simples](website/i18n/fr/docusaurus-plugin-content-docs/current/guides/publish-plain-files.md) |
-| Installer et exploiter le serveur | [Installation](website/i18n/fr/docusaurus-plugin-content-docs/current/operations/install.md), [Configuration](website/i18n/fr/docusaurus-plugin-content-docs/current/operations/configuration.md), [Sécurité](website/i18n/fr/docusaurus-plugin-content-docs/current/operations/security.md) |
-| Intégrer l'API | [Consommer les versions](website/i18n/fr/docusaurus-plugin-content-docs/current/guides/consume-releases.md), [Référence de l'API HTTP](website/i18n/fr/docusaurus-plugin-content-docs/current/reference/api/index.md) |
-| Résoudre un problème | [Dépannage](website/i18n/fr/docusaurus-plugin-content-docs/current/troubleshooting.md) |
+| Je veux…                             | Lire                                                                                                                                                                                                                                                                                         |
+|--------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Comprendre le modèle                 | [Introduction](website/i18n/fr/docusaurus-plugin-content-docs/current/intro.md), [Staging et publication](website/i18n/fr/docusaurus-plugin-content-docs/current/concepts/staging-and-publish.md)                                                                                            |
+| Essayer en 5 minutes                 | [Démarrage rapide](website/i18n/fr/docusaurus-plugin-content-docs/current/getting-started/quick-start.md)                                                                                                                                                                                    |
+| Publier depuis goreleaser ou une CI  | [Publier avec goreleaser](website/i18n/fr/docusaurus-plugin-content-docs/current/guides/publish-with-goreleaser.md), [Pipelines CI](website/i18n/fr/docusaurus-plugin-content-docs/current/guides/ci-pipelines.md)                                                                           |
+| Publier des fichiers sans goreleaser | [Publier des fichiers simples](website/i18n/fr/docusaurus-plugin-content-docs/current/guides/publish-plain-files.md)                                                                                                                                                                         |
+| Installer et exploiter le serveur    | [Installation](website/i18n/fr/docusaurus-plugin-content-docs/current/operations/install.md), [Configuration](website/i18n/fr/docusaurus-plugin-content-docs/current/operations/configuration.md), [Sécurité](website/i18n/fr/docusaurus-plugin-content-docs/current/operations/security.md) |
+| Intégrer l'API                       | [Consommer les versions](website/i18n/fr/docusaurus-plugin-content-docs/current/guides/consume-releases.md), [Référence de l'API HTTP](website/i18n/fr/docusaurus-plugin-content-docs/current/reference/api/index.md)                                                                        |
+| Résoudre un problème                 | [Dépannage](website/i18n/fr/docusaurus-plugin-content-docs/current/troubleshooting.md)                                                                                                                                                                                                       |
 
 Le [standard `local-registry/v1`](SPEC.fr.md) est la définition normative de `registry.yaml`, `release.json`, `index.json` et des règles de publication, pour ceux qui écrivent des clients ou des outils.
 
 ## Installation
 
-| Canal | Où l'obtenir |
-| --- | --- |
-| Image conteneur (linux/amd64, linux/arm64, signée) | `ghcr.io/nivekalara237/local-registry`, aussi sur Docker Hub |
-| Binaires (Linux, macOS, Windows) | [Releases GitHub](https://github.com/nivekalara237/local-registry/releases) |
-| Depuis les sources (Go 1.27+) | `go build -o local-registry ./cmd` |
+| Canal                                              | Où l'obtenir                                                                |
+|----------------------------------------------------|-----------------------------------------------------------------------------|
+| Image conteneur (linux/amd64, linux/arm64, signée) | `ghcr.io/nivekalara237/local-registry`, aussi sur Docker Hub                |
+| Binaires (Linux, macOS, Windows)                   | [Releases GitHub](https://github.com/nivekalara237/local-registry/releases) |
+| Depuis les sources (Go 1.27+)                      | `go build -o local-registry ./cmd`                                          |
 
 [Installation](website/i18n/fr/docusaurus-plugin-content-docs/current/operations/install.md) couvre systemd, Docker et Kubernetes.
 

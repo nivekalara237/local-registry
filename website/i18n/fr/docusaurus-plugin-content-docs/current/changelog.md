@@ -6,7 +6,7 @@ description: Les changements de local-registry qui concernent les exploitants, l
 
 Cette page liste les changements de local-registry qui comptent pour ceux qui l'exploitent, y publient ou y lisent. Les versions suivent le [versionnage sémantique](https://semver.org). Avant `1.0.0`, les pré-releases peuvent encore changer de comportement.
 
-## Non publié
+## 1.0.0-rc.3
 
 ### Ajouté
 
@@ -34,6 +34,11 @@ Cette page liste les changements de local-registry qui comptent pour ceux qui l'
 ### Déprécié
 
 - `POST /releases/{version}` : il ne lit que le produit `gitlab`. Utilisez `POST /releases/{product}/{version}`.
+
+### Sécurité
+
+- **Go 1.27.3.** Les binaires et les images sont compilés avec Go 1.27.3, qui corrige [GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809).
+- **Le fichier de checksums de chaque release est signé** (Sigstore, sans clé). Vérifiez-le avec la commande `cosign verify-blob` des notes de release.
 
 ## 1.0.0-rc.2
 

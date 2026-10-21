@@ -5,7 +5,7 @@ description: Changes of local-registry that affect operators, publishers and cli
 
 This page lists the changes of local-registry that matter to the people who run it, publish to it, or read from it. Versions follow [semantic versioning](https://semver.org). Before `1.0.0`, pre-releases may still change behaviour.
 
-## Unreleased
+## 1.0.0-rc.3
 
 ### Added
 
@@ -33,6 +33,11 @@ This page lists the changes of local-registry that matter to the people who run 
 ### Deprecated
 
 - `POST /releases/{version}`: it reads the `gitlab` product only. Use `POST /releases/{product}/{version}`.
+
+### Security
+
+- **Go 1.27.3.** Binaries and images are built with Go 1.27.3, which fixes [GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809).
+- **The checksums file of each release is signed** (Sigstore keyless). Verify it with the `cosign verify-blob` command of the release notes.
 
 ## 1.0.0-rc.2
 
