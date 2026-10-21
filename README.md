@@ -8,11 +8,16 @@
   <a href="https://github.com/nivekalara237/local-registry/actions/workflows/security.yml"><img alt="security" src="https://github.com/nivekalara237/local-registry/actions/workflows/security.yml/badge.svg" /></a>
   <a href="https://codecov.io/gh/nivekalara237/local-registry"><img alt="coverage" src="https://codecov.io/gh/nivekalara237/local-registry/graph/badge.svg?token=3UEZCSODUL" /></a>
   <a href="https://github.com/nivekalara237/local-registry/actions/workflows/release.yml"><img alt="release" src="https://github.com/nivekalara237/local-registry/actions/workflows/release.yml/badge.svg" /></a>
-  <a href="https://github.com/nivekalara237/local-registry/actions/workflows/docs.yml"><img alt="docs" src="https://github.com/nivekalara237/local-registry/actions/workflows/docs.yml/badge.svg" /></a>
-  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" /></a>
 </p>
 
-<p align="center"><b>English</b> | <a href="README.fr.md">Français</a></p>
+
+<p align="center">
+    <a href="https://github.com/nivekalara237/local-registry/releases"><img alt="latest version" src="https://img.shields.io/github/v/release/nivekalara237/local-registry?include_prereleases&sort=semver&display_name=tag&label=release" /></a>
+    <a href="https://github.com/nivekalara237/local-registry/actions/workflows/docs.yml"><img alt="docs" src="https://github.com/nivekalara237/local-registry/actions/workflows/docs.yml/badge.svg" /></a>
+    <a href="LICENSE"><img alt="licence" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" /></a>
+</p>
+
+<p align="center"><a href="https://local-registry.nivekaa.com"><b>Documentation</b></a> | <a href="README.fr.md">Français</a></p>
 
 # local-registry
 
@@ -37,7 +42,7 @@ Run the server:
 export LOCAL_REGISTRY_UPLOAD_TOKEN="$(openssl rand -hex 32)"
 docker run -d --name local-registry -p 8077:8077 \
   -v local-registry-data:/data -e LOCAL_REGISTRY_UPLOAD_TOKEN \
-  ghcr.io/nivekalara237/local-registry:1.0.0-rc.2
+  ghcr.io/nivekalara237/local-registry:1.0.0-rc.3
 ```
 
 Publish a version, from a clone of this repository: a product card and any files.
