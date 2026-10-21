@@ -4,8 +4,13 @@
 
 <p align="center">
   <a href="https://github.com/nivekalara237/local-registry/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/nivekalara237/local-registry/actions/workflows/ci.yml/badge.svg" /></a>
+  <a href="https://github.com/nivekalara237/local-registry/actions/workflows/tests.yml"><img alt="tests" src="https://github.com/nivekalara237/local-registry/actions/workflows/tests.yml/badge.svg" /></a>
+  <a href="https://github.com/nivekalara237/local-registry/actions/workflows/security.yml"><img alt="security" src="https://github.com/nivekalara237/local-registry/actions/workflows/security.yml/badge.svg" /></a>
+  <a href="https://codecov.io/gh/nivekalara237/local-registry">
+    <img alt="coverage" src="https://codecov.io/gh/nivekalara237/local-registry/graph/badge.svg?token=3UEZCSODUL" />
+  </a>
   <a href="https://github.com/nivekalara237/local-registry/actions/workflows/release.yml"><img alt="release" src="https://github.com/nivekalara237/local-registry/actions/workflows/release.yml/badge.svg" /></a>
-  <a href="https://github.com/nivekalara237/local-registry/actions/workflows/docs.yml"><img alt="release" src="https://github.com/nivekalara237/local-registry/actions/workflows/docs.yml/badge.svg" /></a>
+  <a href="https://github.com/nivekalara237/local-registry/actions/workflows/docs.yml"><img alt="docs" src="https://github.com/nivekalara237/local-registry/actions/workflows/docs.yml/badge.svg" /></a>
   <a href="LICENSE"><img alt="licence" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" /></a>
 </p>
 
