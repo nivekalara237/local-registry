@@ -5,6 +5,7 @@
 <p align="center">
   <a href="https://github.com/nivekalara237/local-registry/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/nivekalara237/local-registry/actions/workflows/ci.yml/badge.svg" /></a>
   <a href="https://github.com/nivekalara237/local-registry/actions/workflows/release.yml"><img alt="release" src="https://github.com/nivekalara237/local-registry/actions/workflows/release.yml/badge.svg" /></a>
+  <a href="https://github.com/nivekalara237/local-registry/actions/workflows/docs.yml"><img alt="release" src="https://github.com/nivekalara237/local-registry/actions/workflows/docs.yml/badge.svg" /></a>
   <a href="LICENSE"><img alt="licence" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" /></a>
 </p>
 
