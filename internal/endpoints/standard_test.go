@@ -11,6 +11,7 @@ import (
 	"github.com/nivekalara237/local-registry/internal/core"
 	"github.com/nivekalara237/local-registry/internal/endpoints"
 	"github.com/nivekalara237/local-registry/internal/testutil"
+	"github.com/nivekalara237/local-registry/schema"
 )
 
 const productYAML = `apiVersion: local-registry/v1
@@ -327,5 +328,36 @@ func TestPublishWritesChecksums(t *testing.T) {
 	raw, _ := os.ReadFile(filepath.Join(final, "release.json"))
 	if err := json.Unmarshal(raw, &doc); err != nil || doc.Checksums == nil || doc.Checksums.Name != "checksums.txt" || len(doc.Artifacts) != 2 {
 		t.Fatalf("release.json = %s, %v", raw, err)
+	}
+}
+
+func TestAddProductSchemaRoutes(t *testing.T) {
+	_, registry := testutil.NewRegistry(t)
+	endpoints.AddProductSchemaRoutes(registry)
+
+	resp, _ := testutil.Do(t, registry.Mux, testutil.Call{Method: "GET", Target: "/registry/json-schema"})
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /registry/json-schema: %d %s", resp.Code, resp.Body)
+	}
+}
+
+func TestAddProductSchemaInvalidation(t *testing.T) {
+	orig := schema.RegistrySchemaJson
+	t.Cleanup(func() {
+		schema.RegistrySchemaJson = orig
+	})
+	_, registry := testutil.NewRegistry(t)
+	endpoints.AddProductSchemaRoutes(registry)
+
+	for _, invalidJson := range [][]byte{
+		make([]byte, 0),
+		[]byte(`"wrong": "value"`),
+	} {
+		schema.RegistrySchemaJson = invalidJson
+		resp, _ := testutil.Do(t, registry.Mux, testutil.Call{Method: "GET", Target: "/registry/json-schema"})
+		if resp.Code != http.StatusInternalServerError {
+			t.Fatalf("GET /registry/json-schema: %d %s", resp.Code, resp.Body)
+		}
 	}
 }

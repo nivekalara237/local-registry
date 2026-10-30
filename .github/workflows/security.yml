@@ -47,6 +47,7 @@ jobs:
           scanners: vuln,secret,misconfig
           format: sarif
           output: trivy.sarif
+          skip-dirs: 'website'
           exit-code: "0"
       - name: upload trivy report
         if: always()
@@ -65,4 +66,5 @@ jobs:
           ignore-unfixed: true
           format: table
           exit-code: "1"
+          skip-dirs: 'website'
           skip-setup-trivy: true

@@ -194,8 +194,8 @@ func TestProductFileSchemaMatches(t *testing.T) {
 	}
 	var tags []string
 	typ := reflect.TypeFor[ProductFile]()
-	for i := range typ.NumField() {
-		tags = append(tags, typ.Field(i).Tag.Get("yaml"))
+	for field := range typ.Fields() {
+		tags = append(tags, field.Tag.Get("yaml"))
 	}
 	if got := slices.Sorted(maps.Keys(schema.Properties)); !slices.Equal(got, slices.Sorted(slices.Values(tags))) {
 		t.Fatalf("schema properties = %v, ProductFile keys = %v", got, tags)
