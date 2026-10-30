@@ -31,7 +31,7 @@ var (
 // changeKinds maps a commit type to its release note kind; other types (docs, test, chore,
 // ci, build, style…) are not release notes.
 var changeKinds = map[string]string{
-	"feat": "added", "add": "added",
+	"feat": "added", "add": "added", "feature": "added",
 	"fix": "fixed", "bugfix": "fixed",
 	"perf": "changed", "refactor": "changed", "change": "changed",
 	"deprecate": "deprecated", "deprecated": "deprecated",

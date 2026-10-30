@@ -2,6 +2,7 @@ package endpoints
 
 import (
 	"cmp"
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/nivekalara237/local-registry/internal/core"
+	"github.com/nivekalara237/local-registry/schema"
 )
 
 // ProductIndex is index.json: the product card and the versions published with a release.json.
@@ -224,6 +226,21 @@ func AddProductRoutes(reg *core.Registry) {
 	})
 	reg.AddRouteE("/{product}/releases/{version}", "GET", func(pvs ...string) (any, error) {
 		return ReadReleaseDocument(l, pvs[0], pvs[1])
+	})
+}
+
+func AddProductSchemaRoutes(reg *core.Registry) {
+	// l := reg.Layout
+	reg.AddRouteE("/registry/json-schema", "GET", func(s ...string) (any, error) {
+		schemaJson := schema.RegistrySchemaJson
+		if len(schemaJson) == 0 {
+			return nil, errors.New("registry.schema.json not found")
+		}
+		raw := json.RawMessage(schemaJson)
+		if !json.Valid(raw) {
+			return nil, errors.New("the registry.schema.json is invalid")
+		}
+		return raw, nil
 	})
 }
 

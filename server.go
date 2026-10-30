@@ -130,6 +130,10 @@ func (s *LocalRegistryServer) AddProductRoutes() {
 	endpoints.AddProductRoutes(s.reg)
 }
 
+func (s *LocalRegistryServer) AddProductSchema() {
+	endpoints.AddProductSchemaRoutes(s.reg)
+}
+
 // statusRecorder captures the status and size of a response for the request log.
 type statusRecorder struct {
 	http.ResponseWriter

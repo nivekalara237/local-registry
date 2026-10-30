@@ -138,6 +138,7 @@ func newServer() (*localregistry.LocalRegistryServer, error) {
 	server.AddFileRoute("/assets/checksum/{filename}", "GET", "filename")
 	server.AddReleaseRoutes(args.publicURL)
 	server.AddProductRoutes()
+	server.AddProductSchema()
 	// Liveness probe (Docker HEALTHCHECK, load balancers): answers as soon as the server serves.
 	server.AddRoute("/healthz", "GET", func(...string) any { return map[string]string{"status": "ok"} })
 	server.AddRouteE("/{product}/artifacts", "GET", fnGetArtifacts)
