@@ -4,7 +4,7 @@ description: Read the products, their index and the release.json of each version
 sidebar_label: Products
 ---
 
-These routes expose the documents of the [local-registry/v1 standard](../../concepts/standard-v1.md): the list of products, each product's `index.json`, and each version's `release.json`. They are the recommended way to discover releases, whether they were built with goreleaser or not. They are read-only and need no token.
+These routes expose the documents of the [local-registry/v1 standard](../../concepts/standard-v1.md): the list of products and their search, each product's `index.json`, and each version's `release.json`. They are the recommended way to discover releases, whether they were built with goreleaser or not. They are read-only and need no token.
 
 Only versions that have a `release.json` exist for these routes. Versions published before the standard stay available through the [artifacts](./artifacts.md) and [legacy](./legacy.md) routes.
 
@@ -47,11 +47,73 @@ curl -s https://registry.example.com/products
 
 An empty registry answers `[]`. Errors: `500` only (unreadable disk).
 
+## Search products
+
+`GET /products/search`
+
+Returns, one page at a time, the products that match every criterion given. Without a criterion, it returns every product. The rules are in the [standard](../../concepts/standard-v1.md), section 7.1 of the specification.
+
+| Parameter | In | Description |
+| --- | --- | --- |
+| `q` | query | Text searched, regardless of case, in the name, display name, description and keywords. |
+| `keyword` | query | Keyword the product must have, regardless of case. Repeatable: every keyword must match. |
+| `label` | query | `key=value` label the product must have, exactly. Repeatable: every label must match. |
+| `owner` | query | Name or email of an owner, regardless of case. |
+| `license` | query | License of the product, regardless of case, such as `Apache-2.0`. |
+| `deprecated` | query | `true` or `false`: whether the current version is deprecated. |
+| `prerelease` | query | `true` or `false`: whether the current version is a pre-release. |
+| `updatedSince` | query | `YYYY-MM-DD`: products published that day (UTC) or later. |
+| `sort` | query | `product` (default), `displayName` or `updatedAt`. Prefix with `-` for descending order: `-updatedAt` lists the most recent first. |
+| `limit` | query | Page size, from 1 to 100. Default: 25. |
+| `cursor` | query | The `next` value of the previous page. |
+
+The current version of a product is its latest version, else its highest version. A product with an old pre-release but a stable latest version is not a pre-release.
+
+```sh
+curl -s "https://registry.example.com/products/search?keyword=db&label=team=billing&sort=-updatedAt&limit=1"
+```
+
+```json
+{
+  "apiVersion": "local-registry/v1",
+  "items": [
+    {
+      "product": "billing-db-migrations",
+      "displayName": "Billing DB migrations",
+      "description": "Liquibase changelogs of the billing database.",
+      "latest": "v1.0.0",
+      "updatedAt": "2026-10-18T09:12:44Z",
+      "keywords": ["db", "liquibase"],
+      "labels": { "team": "billing" },
+      "license": "Proprietary",
+      "deprecated": false
+    }
+  ],
+  "total": 2,
+  "limit": 1,
+  "next": "eyJrIjoiMjAyNi0xMC0xOFQwOToxMjo0NFoiLCJwIjoiYmlsbGluZy1kYi1taWdyYXRpb25zIiwicSI6IjFhMmIzYzRkNWU2ZjcwODEifQ"
+}
+```
+
+| Field | Content |
+| --- | --- |
+| `items` | The products of the page: the fields of [`GET /products`](#list-products), plus `keywords`, `labels`, `license` and `deprecated` (whether the current version is deprecated). |
+| `total` | Number of products that match, all pages together. |
+| `limit` | Page size used. |
+| `next` | Cursor of the next page, `null` on the last page. |
+
+**Pagination.** To get the next page, send the same request with `cursor=<next>`. The same URL is also in the `Link: <…>; rel="next"` header, which is absent on the last page. A page starts right after the last product of the previous one: a product published or removed in between is neither repeated nor skipped. Keep the same criteria and `sort` from page to page; `limit` may change. A loop that reads every page is in [Consume releases](../../guides/consume-releases.md#search-products).
+
+| Status | Cause |
+| --- | --- |
+| `400` | Unknown parameter, invalid value (`limit`, `sort`, `deprecated`, `prerelease`, `label`, `updatedSince`), invalid cursor, or a cursor made for other criteria or another sort. The message lists every invalid parameter. |
+| `500` | The disk cannot be read. |
+
 ## Get a product index
 
 `GET /{product}/index`
 
-Returns the product card and every version that has a `release.json`. The document is rebuilt from the disk at each request: a `latest` changed by hand shows at once. Its format is in [index.json](../index-json.md).
+Returns the product card and every version that has a `release.json`. The server serves `<product>/index.json` while it matches the disk, and rebuilds the document otherwise: a version removed or a `latest` changed by hand shows at once. Its format is in [index.json](../index-json.md).
 
 | Parameter | In | Description |
 | --- | --- | --- |

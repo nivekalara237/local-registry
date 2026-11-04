@@ -15,6 +15,7 @@ The server listens on `http://localhost:8077` by default (`--address`, `--port`)
 | Method | Route | Auth | Returns | Page |
 | --- | --- | --- | --- | --- |
 | `GET` | `/products` | — | Every product, with its latest version | [Products](./products.md) |
+| `GET` | `/products/search` | — | The products that match criteria, one page at a time | [Products](./products.md) |
 | `GET` | `/{product}/index` | — | `index.json`: the product card and its versions | [Products](./products.md) |
 | `GET` | `/{product}/releases/{version}` | — | `release.json` of a version (`latest` allowed) | [Products](./products.md) |
 | `GET` | `/{product}/artifacts` | — | `artifacts.json` of the latest version | [Artifacts](./artifacts.md) |

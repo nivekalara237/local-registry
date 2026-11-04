@@ -4,7 +4,7 @@ description: Normative reference of index.json, the document that describes a pr
 sidebar_label: index.json
 ---
 
-`index.json` describes a product: its card (from `registry.yaml`), its latest version, and every version published with a `release.json`. It is what a catalogue or a portal shows for a product. The server rewrites `bin.local/assets/binaries/<product>/index.json` after each publish of the product, and `GET /{product}/index` rebuilds the same document from the disk at each request (see [Products API](./api/products.md)).
+`index.json` describes a product: its card (from `registry.yaml`), its latest version, and every version published with a `release.json`. It is what a catalogue or a portal shows for a product. The server rewrites `bin.local/assets/binaries/<product>/index.json` after each publish of the product, and `GET /{product}/index` serves it (see [Products API](./api/products.md)).
 
 ## Example
 
@@ -64,4 +64,4 @@ Each entry of `versions`, copied from that version's [`release.json`](./release-
 - **Which versions.** Only versions that have a `release.json`. Versions published before the standard are not converted: they stay downloadable through the other routes.
 - **Order.** Semver versions first, newest first by semver precedence (`v1.10.0` before `v1.2.0`, `v1.0.0` before `v1.0.0-rc.1`). Other names follow, newest `publishedAt` first.
 - **`latest`.** The `version` named by `<product>/release.json`, the copy that `publish?latest=true` writes, provided that version has a `release.json`; `null` otherwise. See [Latest](../concepts/latest.md).
-- **Freshness.** The file on disk is rewritten atomically after each publish of the product. `GET /{product}/index` does not read it: it rebuilds the index at each request, so a `latest` changed by hand shows at once.
+- **Freshness.** The file on disk is rewritten atomically after each publish of the product. `GET /{product}/index`, `GET /products` and `GET /products/search` read it while it lists exactly the versions that have a `release.json` and the current latest version. Otherwise they rebuild the index from the disk, without rewriting the file: a version removed or a `latest` changed by hand shows at once.

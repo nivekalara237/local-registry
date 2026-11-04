@@ -15,6 +15,7 @@ R=https://registry.example.com
 | Quoi | URL | Change dans le temps |
 | --- | --- | --- |
 | Tous les produits, avec leur dernière version | `GET $R/products` | oui |
+| Les produits qui répondent à des critères, page par page | `GET $R/products/search?…` | oui |
 | Un produit, sa fiche et ses versions | `GET $R/{product}/index` | oui |
 | Une version : fichiers, plateformes, sha256, notes | `GET $R/{product}/releases/{version}` | jamais : une version est immuable |
 | La dernière version | `GET $R/{product}/releases/latest` | quand une nouvelle dernière version est publiée |
@@ -35,6 +36,30 @@ curl -fsS "$R/products" | jq -r '.[] | [.product, (.latest // "-"), .displayName
 billing-db-migrations  v1.0.0  Billing database migrations
 sonarbridge            v1.4.2  SonarBridge
 ```
+
+## Rechercher des produits
+
+`/products/search` filtre le catalogue côté serveur et le renvoie une page à la fois. Les critères se combinent : tous doivent correspondre.
+
+```sh
+curl -fsS -G "$R/products/search" --data-urlencode "keyword=db" --data-urlencode "label=team=billing" \
+  | jq -r '.items[] | [.product, (.latest // "-")] | @tsv'
+```
+
+Pour lire tous les résultats, suivez `next` jusqu'à ce qu'il vaille `null`. `-G` avec `--data-urlencode` encode chaque valeur, curseur compris :
+
+```sh
+cursor=
+while :; do
+  page=$(curl -fsS -G "$R/products/search" --data-urlencode "keyword=db" \
+    --data-urlencode "limit=100" --data-urlencode "cursor=$cursor")
+  jq -r '.items[] | [.product, (.latest // "-")] | @tsv' <<<"$page"
+  cursor=$(jq -r '.next // empty' <<<"$page")
+  [ -n "$cursor" ] || break
+done
+```
+
+Gardez les mêmes critères d'une page à l'autre : un curseur envoyé avec d'autres critères répond `400`. Tous les paramètres sont dans [Rechercher des produits](../reference/api/products.md#rechercher-des-produits).
 
 ## Trouver la dernière version
 
@@ -97,7 +122,7 @@ Les clients écrits avant le standard `local-registry/v1` lisent directement les
 
 ## Bonnes pratiques
 
-- **Mettez en cache par version.** Une version publiée ne change jamais : vous pouvez garder son `release.json` et ses fichiers indéfiniment. Seuls `/products`, `/{product}/index` et `/releases/latest` changent.
+- **Mettez en cache par version.** Une version publiée ne change jamais : vous pouvez garder son `release.json` et ses fichiers indéfiniment. Seuls `/products`, `/products/search`, `/{product}/index` et `/releases/latest` changent.
 - **Vérifiez toujours le sha256** avant d'installer un fichier.
 - **Échouez sur les erreurs HTTP** : `curl -f` transforme un `404` en code de sortie au lieu d'enregistrer une page d'erreur.
 - **Un téléchargement doit se terminer en 20 secondes.** Sur un lien lent, un gros fichier est coupé : reprenez-le avec `curl -C -`, qui envoie une requête `Range`. Voir [Limites](../limitations.md).

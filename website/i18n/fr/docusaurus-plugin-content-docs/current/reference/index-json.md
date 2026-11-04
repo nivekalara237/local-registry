@@ -4,7 +4,7 @@ description: Référence normative d'index.json, le document qui décrit un prod
 sidebar_label: index.json
 ---
 
-`index.json` décrit un produit : sa fiche (tirée de `registry.yaml`), sa dernière version, et toutes les versions publiées avec un `release.json`. C'est ce qu'un catalogue ou un portail affiche pour un produit. Le serveur réécrit `bin.local/assets/binaries/<product>/index.json` après chaque publication du produit, et `GET /{product}/index` reconstruit le même document depuis le disque à chaque requête (voir [API des produits](./api/products.md)).
+`index.json` décrit un produit : sa fiche (tirée de `registry.yaml`), sa dernière version, et toutes les versions publiées avec un `release.json`. C'est ce qu'un catalogue ou un portail affiche pour un produit. Le serveur réécrit `bin.local/assets/binaries/<product>/index.json` après chaque publication du produit, et `GET /{product}/index` le sert (voir [API des produits](./api/products.md)).
 
 ## Exemple
 
@@ -64,4 +64,4 @@ Chaque entrée de `versions`, copiée du [`release.json`](./release-json.md) de 
 - **Quelles versions.** Seulement celles qui ont un `release.json`. Les versions publiées avant le standard ne sont pas converties : elles restent téléchargeables par les autres routes.
 - **Ordre.** Les versions semver d'abord, de la plus récente à la plus ancienne selon la précédence semver (`v1.10.0` avant `v1.2.0`, `v1.0.0` avant `v1.0.0-rc.1`). Les autres noms suivent, du `publishedAt` le plus récent au plus ancien.
 - **`latest`.** La `version` désignée par `<product>/release.json`, la copie qu'écrit `publish?latest=true`, à condition que cette version ait un `release.json` ; `null` sinon. Voir [Dernière version](../concepts/latest.md).
-- **Fraîcheur.** Le fichier sur disque est réécrit de façon atomique après chaque publication du produit. `GET /{product}/index` ne le lit pas : il reconstruit l'index à chaque requête, donc un `latest` changé à la main apparaît immédiatement.
+- **Fraîcheur.** Le fichier sur disque est réécrit de façon atomique après chaque publication du produit. `GET /{product}/index`, `GET /products` et `GET /products/search` le lisent tant qu'il liste exactement les versions qui ont un `release.json` et la dernière version actuelle. Sinon, ils reconstruisent l'index depuis le disque, sans réécrire le fichier : une version retirée ou un `latest` changé à la main apparaît immédiatement.

@@ -310,7 +310,7 @@ Le type de média se déduit de la fin du nom, casse ignorée, premier suffixe t
 - **La fiche** (`displayName`, `description`, `license`, `owners`, `links`, `keywords`, `labels`, `install`) vient du `registry.yaml` de la dernière version, sinon de la version publiée en dernier. Les valeurs absentes valent `""` pour les chaînes, `[]` ou `{}` pour les listes et les tables. `displayName` est celui du `release.json` de cette version.
 - **`updatedAt`** est le `publishedAt` le plus récent.
 
-Le serveur réécrit `index.json` après chaque publication du produit. Un serveur **PEUT** construire l'index à partir de son stockage à chaque requête au lieu de relire le fichier ; ce serveur le fait, si bien qu'un latest changé à la main se voit aussitôt.
+Le serveur réécrit `index.json` après chaque publication du produit. Un serveur **PEUT** servir le fichier ou construire l'index à partir de son stockage, mais **NE DOIT PAS** servir un index dont les versions ou le `latest` diffèrent de son stockage. Ce serveur sert le fichier tant qu'il liste exactement les versions qui ont un `release.json` et la dernière version actuelle, et reconstruit l'index sinon, sans réécrire le fichier : une version retirée ou un latest changé à la main se voit aussitôt.
 
 ## 7. Routes
 
@@ -319,11 +319,65 @@ Ces routes sont en lecture seule et ne demandent aucun token. Elles répondent �
 | Route | Réponse | Erreurs |
 | --- | --- | --- |
 | `GET /products` | tableau de `{product, displayName, description, latest, updatedAt}`, par nom de produit ; `[]` s'il n'y en a aucun | aucune |
+| `GET /products/search` | une page des produits qui répondent aux critères (section 7.1) | `400` pour un paramètre inconnu, une valeur invalide, ou un curseur qui ne correspond pas à la requête |
 | `GET /{product}/index` | l'index (section 6) | `404` si aucune version du produit n'a de `release.json` |
 | `GET /{product}/releases/{version}` | le `release.json` de la version ; `{version}` **PEUT** valoir `latest` | `404` s'il n'existe pas |
 | `GET /{product}/artifacts/{version}/files/{name}` | un fichier d'une version publiée | `404` s'il n'existe pas |
 
 Les autres routes du serveur (upload, `artifacts.json`, routes historiques) ne font pas partie du standard ; la [référence de l'API HTTP](website/i18n/fr/docusaurus-plugin-content-docs/current/reference/api/index.md) les décrit.
+
+### 7.1 Recherche et pagination
+
+`GET /products/search` renvoie, une page à la fois, les produits qui répondent à tous les critères donnés. Sans critère, il renvoie tous les produits.
+
+| Paramètre | Effet |
+| --- | --- |
+| `q` | Produits dont `product`, `displayName`, `description` ou l'un des `keywords` contient le texte, sans tenir compte de la casse. |
+| `keyword` | Produits qui ont ce mot-clé, sans tenir compte de la casse. Répétable. |
+| `label` | Produits qui ont ce label `clé=valeur`, à l'identique. Répétable. |
+| `owner` | Produits dont l'un des `owners` a ce `name` ou cet `email`, sans tenir compte de la casse. |
+| `license` | Produits dont la `license` est celle-ci, sans tenir compte de la casse. |
+| `deprecated` | `true` ou `false` : produits dont la version courante est, ou n'est pas, dépréciée. |
+| `prerelease` | `true` ou `false` : produits dont la version courante est, ou n'est pas, une pré-version. |
+| `updatedSince` | Une date `YYYY-MM-DD` : produits dont `updatedAt` tombe ce jour-là (UTC) ou après. |
+| `sort` | `product` (par défaut), `displayName` (sans tenir compte de la casse) ou `updatedAt` ; un `-` en tête inverse l'ordre. |
+| `limit` | Taille de la page, de 1 à 100 ; 25 par défaut. |
+| `cursor` | La valeur `next` de la page précédente. |
+
+La version courante d'un produit est sa dernière version, sinon la première version de ses `versions[]` (section 6).
+
+```json
+{
+  "apiVersion": "local-registry/v1",
+  "items": [
+    {
+      "product": "billing-db-migrations",
+      "displayName": "Billing DB migrations",
+      "description": "Liquibase changelogs of the billing database.",
+      "latest": "v1.0.0",
+      "updatedAt": "2026-10-18T09:12:44Z",
+      "keywords": ["db", "liquibase"],
+      "labels": { "team": "billing" },
+      "license": "Proprietary",
+      "deprecated": false
+    }
+  ],
+  "total": 12,
+  "limit": 1,
+  "next": "eyJrIjoiYmlsbGluZy1kYi1taWdyYXRpb25zIiwicCI6ImJpbGxpbmctZGItbWlncmF0aW9ucyIsInEiOiI5ZjJjMWE0YjVkNmU3ZjgwIn0"
+}
+```
+
+- **`items[]`** sont les produits de la page, avec les champs de même nom de leur index (section 6). `deprecated` vaut `true` quand la version courante est dépréciée.
+- **`total`** est le nombre de produits qui répondent aux critères, toutes pages confondues, au moment de la requête.
+- **`next`** est le curseur de la page suivante, ou `null` sur la dernière page. Le serveur **DEVRAIT** aussi envoyer un en-tête `Link: <…>; rel="next"` ([RFC 8288](https://www.rfc-editor.org/rfc/rfc8288)) avec les mêmes paramètres et ce curseur.
+
+Un serveur conforme :
+
+- **DOIT** combiner les critères par un ET, et répondre `400` pour un paramètre inconnu ou une valeur invalide plutôt que de l'ignorer ;
+- **DOIT** trier les produits par la clé de tri, puis par `product`, pour que l'ordre soit total ;
+- **DOIT** commencer une page juste après le produit que désigne le curseur, par clé de tri et par nom, et non à une position : un produit publié ou retiré entre deux pages n'est ni répété ni sauté, et un produit publié après le curseur apparaît à sa place ;
+- **DOIT** répondre `400` pour un curseur créé pour d'autres critères ou un autre tri. `limit` **PEUT** changer d'une page à l'autre.
 
 ## 8. Règles de publication
 
@@ -352,7 +406,9 @@ Un client de ce standard :
 - **DOIT** traiter `null` comme « inconnu », sans s'attendre à une clé absente ;
 - **DEVRAIT** lire `release.json` et `index.json` plutôt que deviner des noms de fichiers ou lire `artifacts.json`, qui n'existe que pour les versions publiées avec ;
 - **DEVRAIT** vérifier chaque fichier téléchargé avec le `sha256` de son entrée `artifacts[]` ;
-- **NE DEVRAIT PAS** dépendre de l'ordre de `artifacts[]`, `changes[]` ou `labels`.
+- **NE DEVRAIT PAS** dépendre de l'ordre de `artifacts[]`, `changes[]` ou `labels` ;
+- **DOIT** traiter un curseur de recherche comme opaque, et l'envoyer avec les critères et le `sort` de la première page ;
+- **DEVRAIT** suivre `next` jusqu'à `null` pour lire tous les résultats, plutôt que de se fier à `total`, qui peut changer entre deux pages.
 
 ## 10. Versionnement du standard
 

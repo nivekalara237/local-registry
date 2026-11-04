@@ -95,6 +95,11 @@ func BuildIndex(l Layout, product string) (*ProductIndex, error) {
 	return endpoints.BuildIndex(l, product)
 }
 
+// ReadIndex returns <product>/index.json while it matches the disk, else rebuilds the index.
+func ReadIndex(l Layout, product string) (*ProductIndex, error) {
+	return endpoints.ReadIndex(l, product)
+}
+
 // ListProducts summarises every product that has a version with a release.json.
 func ListProducts(l Layout) ([]ProductSummary, error) { return endpoints.ListProducts(l) }
 

@@ -51,7 +51,7 @@ La dernière version est celle que désigne `<product>/release.json`. Pour les c
    curl -fsS https://registry.example.com/sonarbridge/index | jq -r .latest
    ```
 
-Le fichier `index.json` sur disque n'est réécrit qu'à la prochaine publication du produit. `GET /sonarbridge/index` ne le lit pas : il reconstruit toujours l'index depuis le disque.
+Le fichier `index.json` sur disque n'est réécrit qu'à la prochaine publication du produit. D'ici là, `GET /sonarbridge/index` voit que son `latest` n'est plus le bon, et reconstruit l'index depuis le disque.
 
 ## Revenir en arrière après une mauvaise release
 
