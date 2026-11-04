@@ -105,7 +105,7 @@ There is no API to delete a version, on purpose: clients may already depend on i
    rm -rf /srv/registry/bin.local/assets/binaries/<product>/<version>
    ```
 
-4. `GET /<product>/index` and `GET /products` are built from the disk at each request: they no longer list the version. The file `<product>/index.json` is rewritten only at the next publish of that product. Until then it still lists the removed version: delete it, or publish a version.
+4. `GET /<product>/index`, `GET /products` and `GET /products/search` no longer list the version: they notice that `<product>/index.json` lists a version that is gone, and rebuild the index from the disk. The file itself is rewritten at the next publish of that product.
 
 Do not reuse a removed version number for different content: caches and clients may still hold the old files under that name.
 

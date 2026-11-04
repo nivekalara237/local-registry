@@ -310,7 +310,7 @@ The media type comes from the end of the name, case ignored, first match wins. A
 - **The card** (`displayName`, `description`, `license`, `owners`, `links`, `keywords`, `labels`, `install`) comes from the `registry.yaml` of the latest version, else of the version published last. Missing values are `""` for strings and `[]` or `{}` for lists and maps. `displayName` is the one of that version's `release.json`.
 - **`updatedAt`** is the most recent `publishedAt`.
 
-The server rewrites `index.json` after each publish of the product. A server **MAY** build the index from its storage at each request instead of reading the file; this server does, so a latest changed by hand shows at once.
+The server rewrites `index.json` after each publish of the product. A server **MAY** serve the file or build the index from its storage, but **MUST NOT** serve an index whose versions or `latest` differ from its storage. This server serves the file while it lists exactly the versions that have a `release.json` and the current latest version, and rebuilds the index otherwise, without rewriting the file: a version removed or a latest changed by hand shows at once.
 
 ## 7. Routes
 
@@ -319,11 +319,65 @@ These routes are read-only and need no token. They answer `GET` and `HEAD`. An e
 | Route | Answer | Errors |
 | --- | --- | --- |
 | `GET /products` | array of `{product, displayName, description, latest, updatedAt}`, by product name; `[]` when there is none | none |
+| `GET /products/search` | one page of the products that match the criteria (section 7.1) | `400` for an unknown parameter, an invalid value, or a cursor that does not match the query |
 | `GET /{product}/index` | the index (section 6) | `404` when no version of the product has a `release.json` |
 | `GET /{product}/releases/{version}` | the `release.json` of the version; `{version}` **MAY** be `latest` | `404` when there is none |
 | `GET /{product}/artifacts/{version}/files/{name}` | a file of a published version | `404` when there is none |
 
 The other routes of the server (upload, `artifacts.json`, legacy routes) are not part of the standard; the [HTTP API reference](website/docs/reference/api/index.md) describes them.
+
+### 7.1 Search and pagination
+
+`GET /products/search` returns, one page at a time, the products that match every criterion given. Without a criterion, it returns every product.
+
+| Parameter | Effect |
+| --- | --- |
+| `q` | Products whose `product`, `displayName`, `description` or one of whose `keywords` contains the text, regardless of case. |
+| `keyword` | Products that have this keyword, regardless of case. Repeatable. |
+| `label` | Products that have this `key=value` label, exactly. Repeatable. |
+| `owner` | Products one of whose `owners` has this `name` or `email`, regardless of case. |
+| `license` | Products whose `license` is this one, regardless of case. |
+| `deprecated` | `true` or `false`: products whose current version is, or is not, deprecated. |
+| `prerelease` | `true` or `false`: products whose current version is, or is not, a pre-release. |
+| `updatedSince` | A date `YYYY-MM-DD`: products whose `updatedAt` is on that day (UTC) or later. |
+| `sort` | `product` (default), `displayName` (regardless of case) or `updatedAt`; a leading `-` reverses the order. |
+| `limit` | Page size, from 1 to 100; 25 by default. |
+| `cursor` | The `next` value of the previous page. |
+
+The current version of a product is its latest version, else the first version of its `versions[]` (section 6).
+
+```json
+{
+  "apiVersion": "local-registry/v1",
+  "items": [
+    {
+      "product": "billing-db-migrations",
+      "displayName": "Billing DB migrations",
+      "description": "Liquibase changelogs of the billing database.",
+      "latest": "v1.0.0",
+      "updatedAt": "2026-10-18T09:12:44Z",
+      "keywords": ["db", "liquibase"],
+      "labels": { "team": "billing" },
+      "license": "Proprietary",
+      "deprecated": false
+    }
+  ],
+  "total": 12,
+  "limit": 1,
+  "next": "eyJrIjoiYmlsbGluZy1kYi1taWdyYXRpb25zIiwicCI6ImJpbGxpbmctZGItbWlncmF0aW9ucyIsInEiOiI5ZjJjMWE0YjVkNmU3ZjgwIn0"
+}
+```
+
+- **`items[]`** are the products of the page, with the fields of the same name of their index (section 6). `deprecated` is `true` when the current version is deprecated.
+- **`total`** is the number of products that match the criteria, all pages together, at the time of the request.
+- **`next`** is the cursor of the next page, or `null` on the last page. The server **SHOULD** also send a `Link: <…>; rel="next"` header ([RFC 8288](https://www.rfc-editor.org/rfc/rfc8288)) with the same parameters and this cursor.
+
+A conforming server:
+
+- **MUST** combine the criteria with AND, and answer `400` for an unknown parameter or an invalid value rather than ignore it.
+- **MUST** order the products by the sort key, then by `product`, so that the order is total.
+- **MUST** start a page right after the product the cursor designates, by sort key and name, not at a position: a product published or removed between two pages is neither repeated nor skipped, and a product published after the cursor appears in its place.
+- **MUST** answer `400` for a cursor made for other criteria or another sort. `limit` **MAY** change from one page to the next.
 
 ## 8. Publication rules
 
@@ -353,6 +407,8 @@ A client of this standard:
 - **SHOULD** read `release.json` and `index.json` rather than guess file names or read `artifacts.json`, which only exists for versions published with one.
 - **SHOULD** check each downloaded file against the `sha256` of its `artifacts[]` entry.
 - **SHOULD NOT** rely on the order of `artifacts[]`, `changes[]` or `labels`.
+- **MUST** treat a search cursor as opaque, and send it with the criteria and `sort` of the first page.
+- **SHOULD** follow `next` until it is `null` to read every result, rather than rely on `total`, which may change between pages.
 
 ## 10. Versioning of the standard
 

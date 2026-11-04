@@ -72,7 +72,7 @@ Un nouveau serveur n'a **aucune route** : enregistrez les groupes dont vous avez
 | `SetAuditLog(a *AuditLog)` | Envoie les événements d'audit à `a`. Sans lui, ils vont à `slog` (message `audit`). |
 | `AddUploadRoutes(cfg UploadConfig)` | `PUT …/files/{name}`, `POST …/publish`, `GET …/files/{name}`. Voir [API de dépôt](./api/upload.md). |
 | `AddReleaseRoutes(publicURL string)` | `POST /releases/{product}/{version}`, `POST /releases/{version}`, `GET /artifacts/metadatas/{product}`. |
-| `AddProductRoutes()` | `GET /products`, `GET /{product}/index`, `GET /{product}/releases/{version}`. |
+| `AddProductRoutes()` | `GET /products`, `GET /products/search`, `GET /{product}/index`, `GET /{product}/releases/{version}`. |
 | `AddFileRoute(uri, method, varName string)` | Sert le fichier public nommé par la variable de chemin `varName`, comme `/assets/binary`. |
 | `AddRoute(uri, method string, f func(...string) any)` | Une route JSON ; `f` reçoit les variables de chemin dans l'ordre où elles apparaissent dans `uri`. |
 | `AddRouteE(uri, method string, f func(...string) (any, error))` | Idem, avec erreurs : un `*HTTPError` répond son statut et son message ; `ErrNotFound` ou `fs.ErrNotExist` répond `404` ; toute autre erreur répond `500 internal error` et n'est que journalisée. |
@@ -113,6 +113,7 @@ Ces fonctions lisent l'arborescence directement, comme le font les routes.
 | `LatestVersion(l Layout, product string) (string, error)` | La version que désigne `<product>/release.json` ; `ErrNotFound` s'il n'y en a pas. |
 | `ReadReleaseDocument(l Layout, product, version string) ([]byte, error)` | Le `release.json` d'une version, tel que stocké ; `latest` accepté. |
 | `BuildIndex(l Layout, product string) (*ProductIndex, error)` | L'[index](./index-json.md) du produit, construit depuis le disque. |
+| `ReadIndex(l Layout, product string) (*ProductIndex, error)` | Ce que répond `GET /{product}/index` : `<product>/index.json` tant qu'il correspond au disque, sinon `BuildIndex`. N'écrit rien. |
 | `ListProducts(l Layout) ([]ProductSummary, error)` | Ce que répond `GET /products`. |
 | `ListRelease(l Layout, product, version, publicURL string) (*Release, error)` | Ce que répond `POST /releases/{product}/{version}`. |
 | `ReadMetadata(l Layout, product, version string) (any, error)` | Le `metadata.json` décodé d'une version ; `latest` ou `""` pour la dernière. |

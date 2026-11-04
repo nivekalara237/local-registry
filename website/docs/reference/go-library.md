@@ -72,7 +72,7 @@ A new server has **no route**: register the groups you need. The binary register
 | `SetAuditLog(a *AuditLog)` | Send audit events to `a`. Without it, they go to `slog` (message `audit`). |
 | `AddUploadRoutes(cfg UploadConfig)` | `PUT …/files/{name}`, `POST …/publish`, `GET …/files/{name}`. See [Upload API](./api/upload.md). |
 | `AddReleaseRoutes(publicURL string)` | `POST /releases/{product}/{version}`, `POST /releases/{version}`, `GET /artifacts/metadatas/{product}`. |
-| `AddProductRoutes()` | `GET /products`, `GET /{product}/index`, `GET /{product}/releases/{version}`. |
+| `AddProductRoutes()` | `GET /products`, `GET /products/search`, `GET /{product}/index`, `GET /{product}/releases/{version}`. |
 | `AddFileRoute(uri, method, varName string)` | Serve the public file named by the path variable `varName`, as `/assets/binary` does. |
 | `AddRoute(uri, method string, f func(...string) any)` | A JSON route; `f` gets the path variables in the order they appear in `uri`. |
 | `AddRouteE(uri, method string, f func(...string) (any, error))` | Same, with errors: an `*HTTPError` answers its status and message; `ErrNotFound` or `fs.ErrNotExist` answers `404`; any other error answers `500 internal error` and is only logged. |
@@ -113,6 +113,7 @@ These functions read the tree directly, as the routes do.
 | `LatestVersion(l Layout, product string) (string, error)` | The version `<product>/release.json` designates; `ErrNotFound` when none. |
 | `ReadReleaseDocument(l Layout, product, version string) ([]byte, error)` | The `release.json` of a version, as stored; `latest` allowed. |
 | `BuildIndex(l Layout, product string) (*ProductIndex, error)` | The product's [index](./index-json.md), built from the disk. |
+| `ReadIndex(l Layout, product string) (*ProductIndex, error)` | What `GET /{product}/index` answers: `<product>/index.json` while it matches the disk, else `BuildIndex`. Writes nothing. |
 | `ListProducts(l Layout) ([]ProductSummary, error)` | What `GET /products` answers. |
 | `ListRelease(l Layout, product, version, publicURL string) (*Release, error)` | What `POST /releases/{product}/{version}` answers. |
 | `ReadMetadata(l Layout, product, version string) (any, error)` | The decoded `metadata.json` of a version; `latest` or `""` for the latest. |

@@ -15,6 +15,7 @@ Par défaut, le serveur écoute sur `http://localhost:8077` (`--address`, `--por
 | Méthode | Route | Auth | Renvoie | Page |
 | --- | --- | --- | --- | --- |
 | `GET` | `/products` | — | Tous les produits, avec leur dernière version | [Produits](./products.md) |
+| `GET` | `/products/search` | — | Les produits qui répondent à des critères, une page à la fois | [Produits](./products.md) |
 | `GET` | `/{product}/index` | — | `index.json` : la fiche du produit et ses versions | [Produits](./products.md) |
 | `GET` | `/{product}/releases/{version}` | — | `release.json` d'une version (`latest` accepté) | [Produits](./products.md) |
 | `GET` | `/{product}/artifacts` | — | `artifacts.json` de la dernière version | [Artifacts](./artifacts.md) |

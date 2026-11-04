@@ -99,6 +99,10 @@ Levées par `POST …/publish`, dans cet ordre. Rien n'est publié ; le staging 
 | `404` | `404 page not found` (texte brut) | Chemin inconnu. |
 | `404` | `404 page not found` (texte brut) | Sur les routes de téléchargement : fichier absent, en staging, caché, hors des arborescences publiques, ou `latest` utilisé comme version. |
 | `405` | `Method Not Allowed` (texte brut) | Mauvaise méthode, comme `GET /releases/…`. L'en-tête `Allow` donne la bonne. |
+| `400` | `unknown parameter "<name>": use q, keyword, …` | `GET /products/search` avec un paramètre qu'il ne connaît pas, souvent une faute de frappe. | Utilisez les paramètres de [Rechercher des produits](./api/products.md#rechercher-des-produits). |
+| `400` | `limit must be between 1 and 100`, `sort must be one of …`, `… must be true or false`, `label "<label>" must be key=value, …`, `updatedSince must be a date: YYYY-MM-DD` | `GET /products/search` avec des valeurs invalides ; un seul message les liste toutes, séparées par `;`. | Corrigez chaque valeur. |
+| `400` | `invalid cursor` | Un `cursor` que le serveur n'a pas écrit, ou tronqué. | Renvoyez la valeur `next` telle quelle, encodée pour l'URL. |
+| `400` | `cursor does not match the query: keep the same filters and sort` | Un curseur envoyé avec d'autres critères ou un autre `sort` que la page dont il vient. | Gardez les critères et le `sort` de la première page ; seul `limit` peut changer. |
 | `500` | `<product>/<version>/release.json is not valid JSON` | Un `release.json` endommagé sur le disque. |
 | `500` | `internal error` | Disque illisible, ou `artifacts.json` ou `metadata.json` stocké qui n'est pas du JSON valide. |
 

@@ -67,6 +67,7 @@ https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.
 | URL | Renvoie |
 | --- | --- |
 | `/products` | Tous les produits |
+| `/products/search?keyword=db` | Les produits qui répondent à des critères, page par page |
 | `/sonarbridge/index` | La fiche produit et ses versions |
 | `/sonarbridge/releases/v1.4.2` | La description d'une version |
 | `/sonarbridge/releases/latest` | La description de la dernière version |

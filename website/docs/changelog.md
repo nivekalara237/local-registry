@@ -5,6 +5,17 @@ description: Changes of local-registry that affect operators, publishers and cli
 
 This page lists the changes of local-registry that matter to the people who run it, publish to it, or read from it. Versions follow [semantic versioning](https://semver.org). Before `1.0.0`, pre-releases may still change behaviour.
 
+## Unreleased
+
+### Added
+
+- **`GET /products/search`**: search the products by text, keyword, label, owner, license, deprecation, pre-release and update date, sorted by name, display name or update date, with cursor pagination (`limit`, `next`, and a `Link` header). See [Search products](reference/api/products.md#search-products).
+- **`ReadIndex`** in the Go library: the index as `GET /{product}/index` serves it.
+
+### Changed
+
+- **The read routes serve `index.json`.** `GET /products`, `GET /products/search` and `GET /{product}/index` read `<product>/index.json` instead of every `release.json`, about five times faster for a product of 50 versions. They still rebuild the index when the file is missing or no longer matches the disk, so a version removed or a latest changed by hand shows at once.
+
 ## 1.0.0-rc.3
 
 ### Added

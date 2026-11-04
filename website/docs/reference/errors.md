@@ -99,6 +99,10 @@ Raised by `POST …/publish`, in this order. Nothing is published; staging is ke
 | `404` | `404 page not found` (plain text) | Unknown path. |
 | `404` | `404 page not found` (plain text) | On download routes: file missing, staged, hidden, outside the public trees, or `latest` used as the version. |
 | `405` | `Method Not Allowed` (plain text) | Wrong method, such as `GET /releases/…`. The `Allow` header gives the right one. |
+| `400` | `unknown parameter "<name>": use q, keyword, …` | `GET /products/search` with a parameter it does not know, often a typo. | Use the parameters of [Search products](./api/products.md#search-products). |
+| `400` | `limit must be between 1 and 100`, `sort must be one of …`, `… must be true or false`, `label "<label>" must be key=value, …`, `updatedSince must be a date: YYYY-MM-DD` | `GET /products/search` with invalid values; one message lists them all, separated by `;`. | Fix each value. |
+| `400` | `invalid cursor` | A `cursor` that the server did not write, or truncated. | Send the `next` value as is, URL-encoded. |
+| `400` | `cursor does not match the query: keep the same filters and sort` | A cursor sent with other criteria or another `sort` than the page it comes from. | Keep the criteria and `sort` of the first page; only `limit` may change. |
 | `500` | `<product>/<version>/release.json is not valid JSON` | A `release.json` damaged on disk. |
 | `500` | `internal error` | Unreadable disk, or a stored `artifacts.json` or `metadata.json` that is not valid JSON. |
 

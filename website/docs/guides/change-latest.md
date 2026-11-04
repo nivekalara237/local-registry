@@ -51,7 +51,7 @@ The latest version is the one named by `<product>/release.json`. For goreleaser 
    curl -fsS https://registry.example.com/sonarbridge/index | jq -r .latest
    ```
 
-The `index.json` file on disk is only rewritten at the next publish of the product. `GET /sonarbridge/index` does not read it: it always rebuilds the index from the disk.
+The `index.json` file on disk is only rewritten at the next publish of the product. Until then, `GET /sonarbridge/index` sees that its `latest` is no longer the current one, and rebuilds the index from the disk.
 
 ## Roll back a bad release
 

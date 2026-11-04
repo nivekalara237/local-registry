@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -159,6 +160,79 @@ func writeIndex(l core.Layout, product string) error {
 	return writeAtomic(filepath.Join(dir, indexFile), data)
 }
 
+// ReadIndex returns <product>/index.json while it still matches the disk: the same versions
+// with a release.json, and the same latest version. When the file is missing, invalid or
+// stale, it rebuilds the index with BuildIndex, without writing it: publish owns index.json.
+// A published version never changes, so the card cannot change without the versions or the
+// latest version changing too.
+func ReadIndex(l core.Layout, product string) (*ProductIndex, error) {
+	if product == reservedProduct {
+		return nil, core.ErrNotFound
+	}
+	dir, err := l.ProductDir(product)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, indexFile))
+	if err != nil {
+		return BuildIndex(l, product)
+	}
+	var idx ProductIndex
+	if json.Unmarshal(raw, &idx) != nil || idx.APIVersion != APIVersion || idx.Product != product || len(idx.Versions) == 0 {
+		return BuildIndex(l, product)
+	}
+	fresh, err := indexMatchesDisk(l, dir, product, &idx)
+	if err != nil {
+		return nil, err
+	}
+	if !fresh {
+		return BuildIndex(l, product)
+	}
+	return &idx, nil
+}
+
+// indexMatchesDisk reports whether idx lists exactly the versions of the product directory dir
+// that have a release.json, and the latest version LatestVersion gives. It reads no release.json:
+// one ReadDir, one stat per version and the small <product>/release.json.
+func indexMatchesDisk(l core.Layout, dir, product string, idx *ProductIndex) (bool, error) {
+	listed := make(map[string]bool, len(idx.Versions))
+	for _, v := range idx.Versions {
+		listed[v.Version] = true
+	}
+	if len(listed) != len(idx.Versions) {
+		return false, nil
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false, err
+	}
+	found := 0
+	for _, e := range entries {
+		if !e.IsDir() || !core.ValidName(e.Name()) || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		_, err := os.Stat(filepath.Join(dir, e.Name(), releaseFile))
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		if !listed[e.Name()] {
+			return false, nil
+		}
+		found++
+	}
+	if found != len(listed) {
+		return false, nil
+	}
+	latest, err := LatestVersion(l, product)
+	if err != nil {
+		return idx.Latest == nil, nil
+	}
+	return idx.Latest != nil && *idx.Latest == latest, nil
+}
+
 // ListProducts summarises every product that has a version with a release.json, by name.
 func ListProducts(l core.Layout) ([]ProductSummary, error) {
 	out := []ProductSummary{}
@@ -173,7 +247,7 @@ func ListProducts(l core.Layout) ([]ProductSummary, error) {
 		if !e.IsDir() || !core.ValidName(e.Name()) || strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
-		idx, err := BuildIndex(l, e.Name())
+		idx, err := ReadIndex(l, e.Name())
 		if errors.Is(err, core.ErrNotFound) {
 			continue
 		}
@@ -214,6 +288,7 @@ func ReadReleaseDocument(l core.Layout, product, version string) (json.RawMessag
 // AddProductRoutes registers the read-only routes of the local-registry/v1 standard on reg:
 //
 //	GET /products                        every product, with its latest version
+//	GET /products/search 				 products by many criteria
 //	GET /{product}/index                 index.json of a product
 //	GET /{product}/releases/{version}    release.json of a version ("latest" allowed)
 func AddProductRoutes(reg *core.Registry) {
@@ -222,10 +297,30 @@ func AddProductRoutes(reg *core.Registry) {
 		return ListProducts(l)
 	})
 	reg.AddRouteE("/{product}/index", "GET", func(pvs ...string) (any, error) {
-		return BuildIndex(l, pvs[0])
+		return ReadIndex(l, pvs[0])
 	})
 	reg.AddRouteE("/{product}/releases/{version}", "GET", func(pvs ...string) (any, error) {
 		return ReadReleaseDocument(l, pvs[0], pvs[1])
+	})
+
+	reg.Mux.HandleFunc("GET /products/search", func(w http.ResponseWriter, req *http.Request) {
+
+		searchEntry := newSearchProduct(req, reg)
+		p, err := searchEntry.parseQuery()
+		if err != nil {
+			core.WriteError(w, req, err)
+			return
+		}
+
+		if p.Cursor != nil {
+			q := req.URL.Query()
+			q.Set("cursor", *p.Cursor)
+			linkHeader := strings.Builder{}
+			_, _ = fmt.Fprintf(&linkHeader, "<%s?%s>; rel=\"next\"", req.URL.Path, q.Encode())
+			w.Header().Set("Link", linkHeader.String())
+		}
+
+		core.WriteJSON(w, http.StatusOK, p)
 	})
 }
 

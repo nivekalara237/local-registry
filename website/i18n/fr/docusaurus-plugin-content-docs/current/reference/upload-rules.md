@@ -61,7 +61,7 @@ flowchart LR
 6. **Latest** (avec `latest=true`) : l'`artifacts.json` de la version est copié dans `<product>/artifacts.json`, ou cette copie est supprimée quand la version n'en a pas ; puis son `release.json` est copié dans `<product>/release.json`, écrit en dernier parce que c'est la marque qui désigne la dernière version. Chaque copie est atomique (fichier temporaire, puis renommage). Voir [Dernière version](../concepts/latest.md).
 7. **index.json** : `<product>/index.json` est réécrit de façon atomique. Voir [index.json](./index-json.md).
 
-Un échec à l'étape 6 ou 7 répond `500 internal error`, mais la version **est** publiée : le journal du serveur indique `version published but latest not updated` ou `version published but index.json not updated`. Corrigez la cause (disque, droits) et réglez latest à la main si besoin (voir [Changer la dernière version](../guides/change-latest.md)) ; l'index est reconstruit par la publication suivante, et `GET /{product}/index` n'en dépend jamais.
+Un échec à l'étape 6 ou 7 répond `500 internal error`, mais la version **est** publiée : le journal du serveur indique `version published but latest not updated` ou `version published but index.json not updated`. Corrigez la cause (disque, droits) et réglez latest à la main si besoin (voir [Changer la dernière version](../guides/change-latest.md)) ; jusqu'à ce que la publication suivante réécrive `index.json`, les routes de lecture voient qu'il est périmé et reconstruisent l'index depuis le disque.
 
 ## Contrôles d'artifacts.json
 

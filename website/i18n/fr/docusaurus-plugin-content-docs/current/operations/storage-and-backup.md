@@ -105,7 +105,7 @@ Il n'y a pas d'API pour supprimer une version, volontairement : des clients en d
    rm -rf /srv/registry/bin.local/assets/binaries/<product>/<version>
    ```
 
-4. `GET /<product>/index` et `GET /products` sont construits depuis le disque à chaque requête : ils ne listent plus la version. Le fichier `<product>/index.json` n'est réécrit qu'à la prochaine publication de ce produit. D'ici là, il liste encore la version retirée : supprimez-le, ou publiez une version.
+4. `GET /<product>/index`, `GET /products` et `GET /products/search` ne listent plus la version : ils voient que `<product>/index.json` liste une version disparue, et reconstruisent l'index depuis le disque. Le fichier lui-même est réécrit à la prochaine publication de ce produit.
 
 Ne réutilisez pas un numéro de version retiré pour un autre contenu : des caches et des clients peuvent encore garder les anciens fichiers sous ce nom.
 
