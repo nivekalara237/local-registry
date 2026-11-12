@@ -6,6 +6,7 @@
   <a href="https://github.com/nivekalara237/local-registry/actions/workflows/ci.yml"><img alt="ci" src="https://github.com/nivekalara237/local-registry/actions/workflows/ci.yml/badge.svg" /></a>
   <a href="https://github.com/nivekalara237/local-registry/actions/workflows/tests.yml"><img alt="tests" src="https://github.com/nivekalara237/local-registry/actions/workflows/tests.yml/badge.svg" /></a>
   <a href="https://github.com/nivekalara237/local-registry/actions/workflows/security.yml"><img alt="security" src="https://github.com/nivekalara237/local-registry/actions/workflows/security.yml/badge.svg" /></a>
+  <a href="https://github.com/nivekalara237/local-registry/actions/workflows/e2e.yml"><img alt="e2e" src="https://github.com/nivekalara237/local-registry/actions/workflows/e2e.yml/badge.svg" /></a>
   <a href="https://codecov.io/gh/nivekalara237/local-registry">
     <img alt="coverage" src="https://codecov.io/gh/nivekalara237/local-registry/graph/badge.svg?token=3UEZCSODUL" />
   </a>

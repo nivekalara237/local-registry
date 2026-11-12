@@ -67,7 +67,7 @@ dockers_v2:
       - "{{ if not .Prerelease }}latest{{ end }}"
     platforms: [linux/amd64, linux/arm64]
     sbom: true
-    labels:
+    annotations:
       org.opencontainers.image.title: local-registry
       org.opencontainers.image.description: Lightweight private HTTP registry for releases, builds and any versioned files
       org.opencontainers.image.licenses: Apache-2.0
@@ -94,6 +94,7 @@ changelog:
       - "^docs:"
       - "^website:"
       - "^test:"
+      - "^e2e:"
       - "^chore:"
 
 release:

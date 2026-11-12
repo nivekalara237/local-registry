@@ -1,0 +1,14 @@
+apiVersion: local-registry/v1
+displayName: GitLab CLI
+description: Command line client for the internal GitLab.
+license: Apache-2.0
+owners:
+  - name: Platform team
+    email: platform@corp.example
+links:
+  - { name: source, url: https://git.corp.example/platform/gitlab-cli }
+keywords: [cli, gitlab]
+labels:
+  team: platform
+install: |
+  tar xzf gitlab_0.2.0-rc.1_linux_amd64.tar.gz

@@ -1,0 +1,53 @@
+[
+  {
+    "name": "metadata.json",
+    "path": "dist/metadata.json",
+    "internal_type": 36,
+    "type": "Metadata"
+  },
+  {
+    "name": "gitlab",
+    "path": "dist/gitlab_linux_amd64_v1/gitlab",
+    "goos": "linux",
+    "goarch": "amd64",
+    "internal_type": 4,
+    "type": "Binary",
+    "extra": {
+      "Binary": "gitlab",
+      "Builder": "go",
+      "ID": "gitlab"
+    }
+  },
+  {
+    "name": "gitlab_0.1.0_linux_amd64.tar.gz",
+    "path": "dist/gitlab_0.1.0_linux_amd64.tar.gz",
+    "goos": "linux",
+    "goarch": "amd64",
+    "internal_type": 1,
+    "type": "Archive",
+    "extra": {
+      "Format": "tar.gz",
+      "ID": "gitlab"
+    }
+  },
+  {
+    "name": "gitlab_0.1.0_darwin_arm64.tar.gz",
+    "path": "dist/gitlab_0.1.0_darwin_arm64.tar.gz",
+    "goos": "darwin",
+    "goarch": "arm64",
+    "internal_type": 1,
+    "type": "Archive",
+    "extra": {
+      "Checksum": "sha256:8ce6a6ede1b221e225d57e882740143ad598fa99c5493296086466b9f119f08f",
+      "Format": "tar.gz",
+      "ID": "gitlab"
+    }
+  },
+  {
+    "name": "gitlab_0.1.0_checksums.txt",
+    "path": "dist/gitlab_0.1.0_checksums.txt",
+    "internal_type": 12,
+    "type": "Checksum",
+    "extra": {}
+  }
+]

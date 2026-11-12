@@ -1,0 +1,11 @@
+apiVersion: local-registry/v1
+displayName: Billing DB migrations
+description: Liquibase changelogs of the billing database.
+license: Proprietary
+owners:
+  - name: Billing team
+    email: billing@corp.example
+keywords: [db, liquibase]
+labels:
+  team: billing
+  cost-center: 4512

@@ -1,0 +1,4 @@
+apiVersion: local-registry/v1
+description: Old bridge, kept for existing scripts.
+keywords: [cli]
+deprecated: replaced by gitlab
