@@ -45,6 +45,38 @@ if [ -n "${HURL_REPORT:-}" ]; then
   report=(--report-html "$HURL_REPORT/html" --report-junit "$HURL_REPORT/junit.xml")
 fi
 
+# checkFixtures fails when a fixture no longer has the sha256 its X-Checksum-Sha256 header expects,
+# typically after an editor reformatted it: the server would only answer 422.
+checkFixtures() {
+  local hurl line want file got bad=0
+  for hurl in *.hurl seed/*.hurl; do
+    want=
+    while IFS= read -r line; do
+      case $line in
+        "X-Checksum-Sha256: "*) want=$(printf '%s' "${line#X-Checksum-Sha256: }" | tr 'A-F' 'a-f') ;;
+        file,*\;)
+          file=${line#file,}
+          file=${file%;}
+          if [ -n "$want" ]; then
+            got=$(shasum -a 256 "$file" 2>/dev/null | cut -d' ' -f1)
+            if [ "$got" != "$want" ]; then
+              echo "$hurl: $file has sha256 ${got:-<missing file>}, X-Checksum-Sha256 says $want" >&2
+              bad=1
+            fi
+          fi
+          want=
+          ;;
+        "") want= ;;
+      esac
+    done <"$hurl"
+  done
+  if [ "$bad" -ne 0 ]; then
+    echo "a fixture changed (reformatted by an editor?): restore it or update its X-Checksum-Sha256" >&2
+    return 1
+  fi
+}
+checkFixtures
+
 secrets="$work/secrets"
 (umask 077 && : >"$secrets")
 

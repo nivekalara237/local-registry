@@ -49,12 +49,12 @@ jsonpath "$.sha256" == "471377929f0abc1c161d5738a78359da735ae34c20e9b50d8c027bb0
 
 PUT {{url}}/gitlab/artifacts/v0.1.0/files/artifacts.json
 Authorization: Bearer {{token}}
-X-Checksum-Sha256: 914462172c2b73d441a142dcea4fcde56b3710884b7c25ef96c2ae4f7271f408
+X-Checksum-Sha256: 85ef0db8285b505eef462e91414d0aa6f91bcd79771183071bcf1b8287c1bd8f
 file,fixtures/gitlab/v0.1.0/artifacts.json;
 HTTP 201
 [Asserts]
 jsonpath "$.name" == "artifacts.json"
-jsonpath "$.sha256" == "914462172c2b73d441a142dcea4fcde56b3710884b7c25ef96c2ae4f7271f408"
+jsonpath "$.sha256" == "85ef0db8285b505eef462e91414d0aa6f91bcd79771183071bcf1b8287c1bd8f"
 
 POST {{url}}/gitlab/artifacts/v0.1.0/publish?latest=true
 Authorization: Bearer {{token}}
