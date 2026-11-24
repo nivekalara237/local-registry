@@ -35,7 +35,7 @@ address: 0.0.0.0
 port: 8443
 tls-cert: /etc/local-registry/fullchain.pem
 tls-key: /etc/local-registry/privkey.pem
-public-url: https://registry.example.com:8443
+public-url: https://registry.corp.example:8443
 max-version-mb: 4096
 staging-ttl: 48h
 audit-log: /var/log/local-registry/audit.log
@@ -79,13 +79,13 @@ max-staging-mb          10240                               default
 min-free-mb             1024                                default
 staging-ttl             48h0m0s                             config file
 audit-log               /var/log/local-registry/audit.log   config file
-public-url              https://registry.example.com:8443   config file
+public-url              https://registry.corp.example:8443   config file
 disable-generate-token  true                                default
 upload-token            set (token_id e2186dbdb1bb)         config file
 ```
 
 - `-` dans la colonne `VALUE` signifie vide.
-- Le token n'est jamais affiché. Vous voyez s'il est défini et son `token_id`, l'identifiant qu'utilisent les logs. Voir [Sécurité](security.md).
+- Le token n'est jamais affiché. Vous voyez s'il est défini et son `token_id`, l'identifiant qu'utilisent les logs. Consultez [Sécurité](security.md).
 
 ## Réglages à revoir avant la production
 
@@ -94,10 +94,10 @@ upload-token            set (token_id e2186dbdb1bb)         config file
 | `asset-path` | aucun, **obligatoire** | Toutes les données y vivent. Le serveur ne se rabat jamais sur le répertoire de travail, ce qui publierait son contenu. |
 | `address` | `localhost` | Par défaut, seuls les clients locaux se connectent. Réglez `0.0.0.0` (ou une interface) pour servir le réseau. |
 | `port` | `8077` | `0` choisit un port libre : utile en test seulement. |
-| `tls-cert`, `tls-key` | aucun | Les deux ou aucun. Avec eux, le serveur ne parle que HTTPS. Sans eux, placez un reverse proxy TLS devant. Voir [Sécurité](security.md). |
-| `public-url` | aucun | L'adresse qu'utilisent les clients, par exemple `https://registry.example.com`. Elle rend les URL de téléchargement absolues. Réglez-la dès que le serveur est derrière un proxy ou un autre nom d'hôte. `artifacts.json` et `release.json` sont écrits à la publication : ils ne changent que pour les versions publiées ensuite ; `POST /releases/…` l'utilise tout de suite. |
+| `tls-cert`, `tls-key` | aucun | Les deux ou aucun. Avec eux, le serveur ne parle que HTTPS. Sans eux, placez un reverse proxy TLS devant. Consultez [Sécurité](security.md). |
+| `public-url` | aucun | L'adresse qu'utilisent les clients, par exemple `https://registry.corp.example`. Elle rend les URL de téléchargement absolues. Réglez-la dès que le serveur est derrière un proxy ou un autre nom d'hôte. `artifacts.json` et `release.json` sont écrits à la publication : ils ne changent que pour les versions publiées ensuite ; `POST /releases/…` l'utilise tout de suite. |
 | `upload-token` | aucun | Sans lui, le registre est en lecture seule : les routes d'upload répondent `403`. |
-| `audit-log` | `<asset-path>/bin.local/audit.log` | Déplacez-le vers votre volume de logs si vous les collectez là. Il ne peut pas être dans une arborescence publique. Voir [Journal d'audit](audit-log.md). |
+| `audit-log` | `<asset-path>/bin.local/audit.log` | Déplacez-le vers votre volume de logs si vous les collectez là. Il ne peut pas être dans une arborescence publique. Consultez [Journal d'audit](audit-log.md). |
 | Quotas et `staging-ttl` | voir [Quotas et staging](quotas-and-staging.md) | Protègent le disque des uploads trop gros ou abandonnés. |
 
 ### Token généré pour un essai
@@ -117,7 +117,7 @@ Toute erreur de configuration arrête le programme avant qu'il écoute, avec `Er
 | `tls-cert and tls-key go together` | Réglez les deux, ou aucun. |
 | `staging-ttl must be 0 or at least 1h0m0s` | Un upload peut durer 30 minutes : un TTL plus court pourrait le purger en cours. |
 | `audit-log … would be downloadable: put it outside bin.local/assets and assets` | Sortez le journal d'audit des arborescences publiques. |
-| `public-url "…" must be an http or https URL with no user, query or fragment, …` | Utilisez une adresse simple comme `https://registry.example.com` (un préfixe de chemin est accepté). |
+| `public-url "…" must be an http or https URL with no user, query or fragment, …` | Utilisez une adresse simple comme `https://registry.corp.example` (un préfixe de chemin est accepté). |
 | `config file <file>: unknown setting "…"` | Corrigez le nom de la clé. |
 
 La liste complète est dans la [référence de la ligne de commande](../reference/cli.md).

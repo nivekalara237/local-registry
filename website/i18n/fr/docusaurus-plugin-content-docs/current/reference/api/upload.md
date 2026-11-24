@@ -4,11 +4,11 @@ description: Déposer les fichiers d'une version en staging, puis les publier de
 sidebar_label: Dépôt
 ---
 
-Une version se publie en deux temps : déposer chaque fichier dans la zone de staging de la version, puis la publier. La publication vérifie les fichiers déposés comme un tout et rend la version visible en une seule opération ; d'ici là, rien n'est public. Le principe est expliqué dans [Staging et publication](../../concepts/staging-and-publish.md) ; les scripts qui le font pour vous sont dans [Scripts](../scripts.md).
+Une version se publie en deux temps : déposer chaque fichier dans la zone de staging de la version, puis la publier. La publication vérifie les fichiers déposés comme un tout et rend la version visible en une seule opération ; d'ici là, rien n'est public. Le principe est expliqué dans [Staging et publication](../../concepts/staging-and-publish.md) ; le client qui le fait pour vous est [localrectl](../localrectl.md).
 
 ```mermaid
 sequenceDiagram
-  participant C as Client (CI, upload.sh)
+  participant C as Client (CI, localrectl)
   participant S as local-registry
   C->>S: PUT …/files/registry.yaml
   C->>S: PUT …/files/NAME pour chaque fichier (X-Checksum-Sha256)
@@ -57,7 +57,7 @@ Envoie un fichier en flux dans la zone de staging de `<product>/<version>`. Rien
 ```sh
 f=billing-db-migrations_1.0.0.tar.gz
 auth | curl -fsS -H @- -H "X-Checksum-Sha256: $(shasum -a 256 "$f" | cut -d' ' -f1)" \
-  -T "$f" "https://registry.example.com/billing-db-migrations/artifacts/v1.0.0/files/$f"
+  -T "$f" "https://registry.corp.example/billing-db-migrations/artifacts/v1.0.0/files/$f"
 ```
 
 `201 Created` :
@@ -84,7 +84,7 @@ Erreurs, dans l'ordre où elles sont vérifiées :
 
 | Statut | Message |
 | --- | --- |
-| `403`, `401` | Voir [Authentification](#authentification). |
+| `403`, `401` | Consultez [Authentification](#authentification). |
 | `400` | `invalid product or version name` |
 | `400` | `product name products is reserved` |
 | `400` | `version name <version> is reserved` |
@@ -117,7 +117,7 @@ Vérifie les fichiers en staging de `<product>/<version>`, écrit les documents 
 | `Authorization` | en-tête | `Bearer <token>`. |
 
 ```sh
-auth | curl -fsS -H @- -X POST "https://registry.example.com/billing-db-migrations/artifacts/v1.0.0/publish?latest=true"
+auth | curl -fsS -H @- -X POST "https://registry.corp.example/billing-db-migrations/artifacts/v1.0.0/publish?latest=true"
 ```
 
 `200 OK` :
@@ -143,7 +143,7 @@ Erreurs :
 
 | Statut | Message |
 | --- | --- |
-| `403`, `401` | Voir [Authentification](#authentification). |
+| `403`, `401` | Consultez [Authentification](#authentification). |
 | `400` | `invalid product or version name`, `product name products is reserved`, `version name <version> is reserved` |
 | `400` | `latest must be true or false` |
 | `409` | `version <product>/<version> is already published and cannot be changed` |

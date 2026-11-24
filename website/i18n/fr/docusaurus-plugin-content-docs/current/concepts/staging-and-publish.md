@@ -13,23 +13,7 @@ Le staging supprime ce risque. Rien n'est public tant que le serveur n'a pas tou
 
 ## Le déroulé
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant P as Éditeur (upload.sh)
-    participant S as Serveur
-    participant St as Staging (privé)
-    participant Pub as Arborescence publiée (publique)
-    P->>S: PUT /{product}/artifacts/{version}/files/{name}
-    S->>St: réception dans un fichier temporaire, contrôle du sha256, déplacement
-    Note over P,St: répété pour chaque fichier, registry.yaml compris
-    P->>S: POST /{product}/artifacts/{version}/publish
-    S->>St: contrôle de la version complète
-    S->>St: écriture de release.json (et de checksums.txt s'il manque)
-    S->>Pub: renommage du dossier de staging (atomique)
-    S->>Pub: mise à jour de latest (si demandé) et d'index.json
-    S-->>P: 200 {product, version, files, latest}
-```
+![Envoi en staging puis publication : les requêtes entre le client, le serveur, le staging et l'arborescence publiée](/img/lorecalre-flow.svg)
 
 ### Dépôt
 
@@ -39,7 +23,7 @@ Chaque `PUT` envoie un fichier, avec le token d'upload.
 - Si vous envoyez `X-Checksum-Sha256`, le serveur le compare à ce qu'il a reçu et refuse toute différence.
 - Renvoyer le même nom remplace le fichier en staging. C'est ainsi qu'on corrige une erreur avant de publier.
 - `registry.yaml` et `CHANGELOG.md` sont validés à l'arrivée : une fiche mal formée est refusée tout de suite.
-- Avec goreleaser, `artifacts.json` arrive **en dernier** : il est refusé tant qu'un fichier qu'il liste manque.
+- Avec GoReleaser, `artifacts.json` arrive **en dernier** : il est refusé tant qu'un fichier qu'il liste manque.
 
 ### Publication
 
@@ -64,13 +48,13 @@ Le renommage est une seule opération du système de fichiers. Avant, la version
 Deux conséquences pour l'exploitation :
 
 - Le staging et l'arborescence publiée sont sur le même système de fichiers, sous `bin.local/`. Ne les montez pas séparément, sinon les renommages ne sont plus atomiques.
-- Un processus serveur possède un dossier de stockage. Le verrou d'upload est en mémoire : deux serveurs écrivant dans le même dossier pourraient s'entremêler. Voir [Limites](../limitations.md).
+- Un processus serveur possède un dossier de stockage. Le verrou d'upload est en mémoire : deux serveurs écrivant dans le même dossier pourraient s'entremêler. Consultez [Limites](../limitations.md).
 
 ## Quand une publication est refusée
 
-Rien n'est publié et **le staging est conservé**. La réponse dit ce qui ne va pas, par exemple `422 registry.yaml not uploaded: every version needs its product card`. Envoyez le fichier manquant ou corrigé sous le même nom et publiez à nouveau, ou relancez simplement `upload.sh`.
+Rien n'est publié et **le staging est conservé**. La réponse dit ce qui ne va pas, par exemple `422 registry.yaml not uploaded: every version needs its product card`. Envoyez le fichier manquant ou corrigé sous le même nom et publiez à nouveau, ou relancez simplement `localrectl publish`.
 
-Les versions abandonnées en staging ne restent pas indéfiniment. Avec `--staging-ttl` (24 h par défaut), le serveur purge les versions en staging inactives depuis cette durée. Voir [Quotas et staging](../operations/quotas-and-staging.md).
+Les versions abandonnées en staging ne restent pas indéfiniment. Avec `--staging-ttl` (24 h par défaut), le serveur purge les versions en staging inactives depuis cette durée. Consultez [Quotas et staging](../operations/quotas-and-staging.md).
 
 ## Voir aussi
 

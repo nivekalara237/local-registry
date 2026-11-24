@@ -3,15 +3,17 @@ title: Quick start
 description: Run a registry on your machine, publish a first version and download it, in about five minutes.
 ---
 
-This page takes you from nothing to a published, downloadable version in about five minutes. You run the server locally, publish two small files, and fetch them back. No goreleaser needed.
+This page takes you from nothing to a published, downloadable version in about five minutes. You run a trial registry on your machine, publish two small files to it, and fetch them back. No GoReleaser needed.
+
+Publishing to another registry works the same way: only the address and the upload token change. If you do not run that registry yourself, the person or team responsible for it gives you both.
 
 ## Before you start
 
 | Tool | Why |
 | --- | --- |
-| Go 1.27+ | Build the server (or take a released binary instead) |
-| bash, curl 7.76+, jq | Run `scripts/upload.sh` |
-| A clone of the repository | The server sources and the upload script |
+| Go 1.27+ and a clone of the repository | Build the server (or take a released binary, see [Install](../operations/install.md)) |
+| [`localrectl`](../reference/localrectl.md) | Publish the version |
+| curl | Read and download |
 
 ## 1. Start the server
 
@@ -28,7 +30,7 @@ export LOCAL_REGISTRY_UPLOAD_TOKEN="$(openssl rand -hex 32)"
 The server listens on `http://localhost:8077`. Leave it running and open a second terminal for the next steps.
 
 > [!NOTE]
-> The token is the only secret. Publishers send it, readers never need it. Without a token, the server still serves downloads but refuses every upload with `403`.
+> The token is the only secret. Publishers (upload, publish) send it; readers (downloads, GET API) never need it. Without a token, the server still serves downloads but refuses every upload with `403`.
 
 ## 2. Prepare a version
 
@@ -42,33 +44,28 @@ tar czf out/hello_0.1.0.tar.gz -C out hello.txt
 cat > registry.yaml <<'YAML'
 apiVersion: local-registry/v1
 displayName: Hello
-description: A first product, to try local-registry.
+description: A first product, to try Local Registry.
 YAML
 ```
 
 ## 3. Publish it
 
-In the second terminal, export the same token and the server address, then run the upload script:
+In the second terminal, export the same token and the server address, then run `localrectl`:
 
 ```sh
 export LOCAL_REGISTRY_UPLOAD_TOKEN="<the token from step 1>"
 export LOCAL_REGISTRY_URL=http://localhost:8077
 
-scripts/upload.sh --latest --version v0.1.0 --product-file registry.yaml hello out
+localrectl publish hello --root out --version v0.1.0 --no-semver-standard \
+  --product-file registry.yaml --latest
 ```
 
-The script uploads each file of `out/` with its sha256, then the product card, then asks the server to publish `v0.1.0` and make it the latest version:
+`localrectl` uploads each file of `out/` and the product card, then asks the server to publish `v0.1.0` and make it the latest version. `--no-semver-standard` allows the `v` prefix in the version name.
 
-```
-== hello v0.1.0 from /home/me/out
-PUT hello.txt <- /home/me/out/hello.txt (sha256 5d1f…)
-PUT hello_0.1.0.tar.gz <- /home/me/out/hello_0.1.0.tar.gz (sha256 a8c2…)
-PUT registry.yaml <- registry.yaml (sha256 0b7e…)
-POST publish hello/v0.1.0 (latest=true)
-{"product":"hello","version":"v0.1.0","files":["checksums.txt","hello.txt","hello_0.1.0.tar.gz","registry.yaml","release.json"],"latest":true}
-```
+> [!TIP]
+> Add `--dry-run` to see what would be sent, without sending anything and without a token.
 
-Notice two files you did not upload: `checksums.txt` and `release.json`. The server wrote them. See [Integrity](../concepts/integrity.md) and [The local-registry/v1 standard](../concepts/standard-v1.md).
+The published version holds two files you did not upload: `checksums.txt` and `release.json`. The server wrote them. See [Integrity](../concepts/integrity.md) and [The local-registry/v1 standard](../concepts/standard-v1.md).
 
 ## 4. Read and download it
 
@@ -88,6 +85,6 @@ You used the full publication cycle: upload to staging, publish atomically, read
 
 ## Next steps
 
-- Publish a real Go project: [Your first goreleaser release](./first-release-goreleaser.md).
-- Publish files that are not binaries: [Publish files without goreleaser](./first-release-files.md).
-- Run it for your team: [Install](../operations/install.md) and [Security](../operations/security.md).
+- Publish a real Go project: [Your first GoReleaser release](./first-release-goreleaser.md).
+- Publish files that are not binaries: [Publish files without GoReleaser](./first-release-files.md).
+- Run a registry of your own: [Install](../operations/install.md) and [Security](../operations/security.md).

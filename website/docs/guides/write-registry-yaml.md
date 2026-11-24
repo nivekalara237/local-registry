@@ -4,11 +4,13 @@ sidebar_label: Write registry.yaml
 description: Write registry.yaml, the product card every version must carry, and check it before you publish.
 ---
 
-`registry.yaml` is the card of your product: its name, owners, links and how to install it. Every version must carry one: the registry refuses to publish without it. This guide writes a good card and catches mistakes before publishing.
+`registry.yaml` is the card of your product. It holds its name, owners, links and install instructions. Every version must come with this card: the registry refuses any publication without it. This guide explains how to write a valid card and catch mistakes before you publish.
 
-## Where it lives
+## Where to put the file
 
-Keep `registry.yaml` at the root of your repository and commit it with the code. `upload.sh` finds it there, or takes the file you pass with `--product-file`. The card is uploaded with each version, so each version keeps the card it was published with. The product page (`index.json`) shows the card of the latest version.
+You can create `registry.yaml` in the directory of your choice and commit it with the code. When you publish, give its path to `localrectl` with the `--product-file` option.
+
+The card is sent with each published version. Each version thus keeps the product information as it was when it was published. The product page (`index.json`) shows the card of the latest version.
 
 ## A complete example
 
@@ -17,10 +19,10 @@ Keep `registry.yaml` at the root of your repository and commit it with the code.
 apiVersion: local-registry/v1
 
 # The name people see. Up to 100 characters.
-displayName: SonarBridge
+displayName: Bridge
 
 # One or two sentences: what it does, for whom. Up to 500 characters.
-description: Bridge between SonarQube and internal tools.
+description: "Sonar Bridge: bridge between SonarQube and internal tools."
 
 # An SPDX identifier (MIT, Apache-2.0…) or "Proprietary".
 license: Proprietary
@@ -32,10 +34,10 @@ owners:
 
 # Useful pages. URLs must start with http:// or https://.
 links:
-  - { name: source, url: https://git.corp.example/platform/sonarbridge }
-  - { name: docs, url: https://docs.corp.example/sonarbridge }
+  - { name: source, url: https://git.corp.example/platform/sonar-bridge }
+  - { name: docs, url: https://docs.corp.example/bridge }
 
-# Up to 20 words to search and filter on.
+# Up to 20 keywords to search and filter the product.
 keywords: [sonar, cli]
 
 # Free key/value pairs for your inventory. Up to 50.
@@ -47,44 +49,57 @@ labels:
 install: |
   Download the archive of your platform and unpack it:
 
-      curl -fsSL https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz | tar xz
+      curl -fsSL https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_linux_amd64.tar.gz | tar xz
 
 # false, true, or a message.
 deprecated: false
 ```
 
-Only `apiVersion` is required. Every field and limit is in the [registry.yaml reference](../reference/registry-yaml.md).
+Only `apiVersion` is required. Each field and its limits are described in the [registry.yaml reference](../reference/registry-yaml.md).
 
-## Check it before you publish
+## Check the card before you publish
 
-The server checks the card when it receives it and answers `422 registry.yaml: <reason>` if it is wrong. Check it earlier, in your merge requests, with the JSON Schema shipped in every local-registry release (`schema/registry.schema.json`):
+The server validates the card when it receives it, and answers `422 registry.yaml: <reason>` if its content is wrong.
+
+You can also run this check locally, before publishing, with the JSON Schema shipped in the Local Registry release archives (`schema/registry.schema.json`).
+
+First install the `check-jsonschema` tool:
 
 ```sh
 pip install check-jsonschema
+```
+
+Then give the schema and the file to check:
+
+```sh
 check-jsonschema --schemafile schema/registry.schema.json registry.yaml
 ```
+
+Replace `registry.yaml` with the path of your file if it sits in another directory.
+
+If you can reach the registry, `localrectl validate registry.yaml` also checks the card against the server's schema. See [localrectl](../reference/localrectl.md).
 
 ## Common mistakes
 
 | Mistake | Effect | Fix |
 | --- | --- | --- |
-| Card copied from another product, `displayName` unchanged | Your product shows under another product's name | Review `displayName`, `description` and `links` when you copy a card |
-| A typo in a key, such as `displayname` | `422 registry.yaml: …`: unknown keys are refused | Use the exact key names above |
-| A `changes:` section | `422`: release notes do not belong in the card | Write a `CHANGELOG.md`: see [Write release notes](write-changelog.md) |
-| `license: Prioritary` | Accepted, but wrong in every inventory | Use an SPDX identifier or `Proprietary` |
-| A link without a scheme, such as `git.corp.example/…` | `422` | Write the full `https://…` URL |
-| `install` pointing at another product or version | Users install the wrong thing | Keep the product and file names of this product |
-| Several YAML documents (`---`) | `422` | Keep one document per file |
+| Card copied from another product, `displayName` unchanged | Your product shows under another product's name | Check `displayName`, `description` and `links` when you reuse an existing card |
+| A typo in a key, such as `displayname` | `422 registry.yaml: …`: unknown keys are refused | Use the exact documented key names |
+| A `changes:` section | `422`: release notes do not belong in the card | Use a `CHANGELOG.md` file: see [Write release notes](write-changelog.md) |
+| `license: Prioritary` | Accepted, but wrong in the inventories | Use an SPDX identifier or `Proprietary` |
+| A link without a scheme, such as `git.corp.example/…` | `422` | Write a full URL starting with `https://` |
+| `install` pointing at another product or version | Users install the wrong product or version | Check the product names, versions and file URLs |
+| Several YAML documents (`---`) | `422` | Keep the file to a single YAML document |
 
 > [!TIP]
-> Numbers and booleans in `labels` are read as text: `cost-center: 4512` becomes `"4512"`. Quote them anyway, to make it explicit.
+> Numbers and booleans in `labels` are read as text: `cost-center: 4512` becomes `"4512"`. Quoting them is still recommended, to make that intent explicit.
 
 ## Deprecate a product
 
-Set `deprecated` in the card of a new version, with a message that tells users what to do:
+To flag a product as deprecated, set the `deprecated` field in the card sent with a new version. Add a message that tells users what to use instead:
 
 ```yaml
-deprecated: replaced by sonarbridge2, see https://docs.corp.example/sonarbridge2
+deprecated: replaced by bridge2, see https://docs.corp.example/bridge2
 ```
 
-The value is stored in that version's `release.json`. Versions already published keep the card they had.
+This value is stored in the `release.json` of that version. Versions already published keep the product card they were published with.

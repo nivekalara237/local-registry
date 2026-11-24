@@ -3,7 +3,7 @@ title: Quotas and staging
 description: Size the staging area, protect the disk, and let the server purge abandoned uploads.
 ---
 
-Uploaded files wait in a staging area until the version is published. Quotas cap how much this area can hold, and a purge removes uploads nobody finished. Tune them when your releases are large, or when many teams publish at once.
+Uploaded files wait in a staging area until the version is published. Quotas cap how much this area can hold, and a purge removes uploads nobody finished. Tune them when your releases are large, or when many publishers send versions at once.
 
 For how staging and publish work, see [Staging and publish](../concepts/staging-and-publish.md).
 
@@ -30,12 +30,12 @@ How the quotas count:
 ### Choosing values
 
 - Set `max-upload-mb` above your largest single file, typically the largest archive or package.
-- Set `max-version-mb` above the total size of one release, and `max-version-files` above its file count. A goreleaser release with many platforms, SBOMs and signatures can exceed 100 files.
+- Set `max-version-mb` above the total size of one release, and `max-version-files` above its file count. A GoReleaser release with many platforms, SBOMs and signatures can exceed 100 files.
 - Set `max-staging-mb` to what you accept on disk for unpublished work: roughly the number of versions published at the same time, multiplied by the size of one version.
 - Keep `min-free-mb` large enough for the server to finish publishing and writing its logs.
 
 ```yaml
-# Large releases, several teams publishing at once
+# Large releases, several publishers at once
 max-upload-mb: 1024
 max-version-mb: 8192
 max-version-files: 300

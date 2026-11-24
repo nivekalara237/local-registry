@@ -3,7 +3,7 @@ title: Storage and backup
 description: The layout of the asset path, how to back it up and restore it, and how to remove a version safely.
 ---
 
-local-registry keeps everything as plain files under one directory, the asset path. There is no database and no cache: the server reads the disk at each request. This page describes the layout, and the procedures that act on it directly: backup, restore, and the removal of a version.
+Local Registry keeps everything as plain files under one directory, the asset path. There is no database and no cache: the server reads the disk at each request. This page describes the layout, and the procedures that act on it directly: backup, restore, and the removal of a version.
 
 ## Layout
 
@@ -83,8 +83,8 @@ For a point-in-time copy, prefer a file-system or volume snapshot (LVM, ZFS, a c
 4. Start the server, then check a product:
 
    ```sh
-   curl -s https://registry.example.com/products
-   curl -s https://registry.example.com/<product>/releases/latest
+   curl -s https://registry.corp.example/products
+   curl -s https://registry.corp.example/<product>/releases/latest
    ```
 
 ## Remove a published version

@@ -1,14 +1,14 @@
 ---
 title: HTTP API
-description: Conventions shared by every route of the local-registry HTTP API, and the list of all routes.
+description: Conventions shared by every route of the Local Registry HTTP API, and the list of all routes.
 sidebar_label: Overview
 ---
 
-The local-registry HTTP API serves published releases and accepts new ones. This page gives the rules every route follows; each group of routes has its own page.
+The Local Registry HTTP API serves published releases and accepts new ones. This page gives the rules every route follows; each group of routes has its own page.
 
 ## Base URL
 
-The server listens on `http://localhost:8077` by default (`--address`, `--port`), or on `https://` when TLS is enabled. Behind a reverse proxy, set `--public-url` (for example `https://registry.example.com`): the download URLs the server writes (`release.json`, the rewritten `artifacts.json`, `POST /releases`) then become absolute URLs under it. Without it they are relative paths such as `/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz`.
+The server listens on `http://localhost:8077` by default (`--address`, `--port`), or on `https://` when TLS is enabled. Behind a reverse proxy, set `--public-url` (for example `https://registry.corp.example`): the download URLs the server writes (`release.json`, the rewritten `artifacts.json`, `POST /releases`) then become absolute URLs under it. Without it they are relative paths such as `/bridge/artifacts/v1.4.2/files/bridge_1.4.2_linux_amd64.tar.gz`.
 
 ## Routes
 
@@ -53,7 +53,7 @@ Every `GET` route also answers `HEAD`. A wrong method answers `405` with an `All
 JSON routes answer `Content-Type: application/json`. On error, the body is:
 
 ```json
-{"error": "version sonarbridge/v1.4.2 is already published and cannot be changed"}
+{"error": "version bridge/v1.4.2 is already published and cannot be changed"}
 ```
 
 File routes (downloads) and routing errors answer plain text.
@@ -84,7 +84,7 @@ Send the header to curl on its standard input, so the token never appears in the
 
 ```sh
 printf 'Authorization: Bearer %s\n' "$LOCAL_REGISTRY_UPLOAD_TOKEN" |
-  curl -fsS -H @- -X POST https://registry.example.com/sonarbridge/artifacts/v1.4.2/publish
+  curl -fsS -H @- -X POST https://registry.corp.example/bridge/artifacts/v1.4.2/publish
 ```
 
 ## Freshness

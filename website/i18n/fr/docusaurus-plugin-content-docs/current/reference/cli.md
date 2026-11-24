@@ -1,6 +1,6 @@
 ---
 title: Ligne de commande
-description: Toutes les commandes, options, variables d'environnement et clés de configuration du binaire local-registry, avec ses codes de sortie.
+description: Toutes les commandes, options, variables d'environnement et clés de configuration du binaire Local Registry, avec ses codes de sortie.
 sidebar_label: Ligne de commande
 ---
 
@@ -51,7 +51,7 @@ Les options s'écrivent `--port 8077` ou `--port=8077` ; un seul tiret (`-port`)
 | `--min-free-mb` | `LOCAL_REGISTRY_MIN_FREE_MB` | `1024` | Espace disque qu'un dépôt doit laisser libre, en Mio. `0` : pas de contrôle. |
 | `--staging-ttl` | `LOCAL_REGISTRY_STAGING_TTL` | `24h` | Purge les versions en staging inactives depuis cette durée. Une durée Go : `0` (jamais) ou au moins `1h`. |
 | `--audit-log` | `LOCAL_REGISTRY_AUDIT_LOG` | `<asset-path>/bin.local/audit.log` | Fichier du journal d'audit. Refusé dans `bin.local/assets/` ou `assets/`, qui sont téléchargeables. |
-| `--public-url` | `LOCAL_REGISTRY_PUBLIC_URL` | — | Adresse par laquelle les clients joignent le serveur, comme `https://registry.example.com` (un préfixe de chemin est permis). Rend absolues les URL de téléchargement écrites par le serveur. Vide : URL relatives. |
+| `--public-url` | `LOCAL_REGISTRY_PUBLIC_URL` | — | Adresse par laquelle les clients joignent le serveur, comme `https://registry.corp.example` (un préfixe de chemin est permis). Rend absolues les URL de téléchargement écrites par le serveur. Vide : URL relatives. |
 | `--disable-generate-token` | `LOCAL_REGISTRY_DISABLE_GENERATE_TOKEN` | `true` | `=false` : génère un jeton de dépôt aléatoire au démarrage quand aucun n'est configuré. |
 | *(pas d'option)* | `LOCAL_REGISTRY_UPLOAD_TOKEN` | — | Jeton de dépôt ; clé de configuration `upload-token`. Vide : dépôt désactivé (`403`). |
 
@@ -70,7 +70,7 @@ address: 0.0.0.0
 port: 8443
 tls-cert: /etc/local-registry/fullchain.pem
 tls-key: /etc/local-registry/privkey.pem
-public-url: https://registry.example.com:8443
+public-url: https://registry.corp.example:8443
 max-version-mb: 4096
 staging-ttl: 48h
 audit-log: /var/log/local-registry/audit.log
@@ -132,7 +132,7 @@ max-staging-mb          10240                               default
 min-free-mb             1024                                default
 staging-ttl             48h0m0s                             flag
 audit-log               /srv/registry/bin.local/audit.log   default
-public-url              https://registry.example.com        config file
+public-url              https://registry.corp.example        config file
 disable-generate-token  true                                default
 upload-token            set (token_id e2186dbdb1bb)         config file
 ```
@@ -154,7 +154,7 @@ Toute erreur arrête le programme avant son démarrage, avec le code de sortie `
 | `<setting> cannot be negative` | Un quota négatif. |
 | `staging-ttl must be 0 or at least 1h0m0s` | La purge pourrait supprimer un dépôt en cours : un dépôt peut durer 30 minutes. |
 | `audit-log <file> would be downloadable: put it outside bin.local/assets and assets` | Journal d'audit dans une arborescence publique. |
-| `public-url "<url>" must be an http or https URL with no user, query or fragment, such as https://registry.example.com` | `--public-url` invalide. |
+| `public-url "<url>" must be an http or https URL with no user, query or fragment, such as https://registry.corp.example` | `--public-url` invalide. |
 | `<setting>: "<value>" is not a whole number` | Nombre illisible dans l'environnement ou le fichier. |
 | `staging-ttl: "<value>" is not a duration such as 90m or 24h` | Durée illisible. |
 | `disable-generate-token: "<value>" is not true or false` | Booléen illisible. |
@@ -164,7 +164,7 @@ Toute erreur arrête le programme avant son démarrage, avec le code de sortie `
 
 ## HTTPS
 
-Avec `--tls-cert` et `--tls-key`, le serveur ne parle que HTTPS : TLS 1.2 ou plus, HTTP/2. Une requête HTTP en clair reçoit `400 Client sent an HTTP request to an HTTPS server.` Le certificat est chargé au démarrage ; une paire invalide fait sortir avec le code `1` (`Error: loading TLS certificate: …`). Redémarrez le serveur pour le changer. Voir [Sécurité](../operations/security.md).
+Avec `--tls-cert` et `--tls-key`, le serveur ne parle que HTTPS : TLS 1.2 ou plus, HTTP/2. Une requête HTTP en clair reçoit `400 Client sent an HTTP request to an HTTPS server.` Le certificat est chargé au démarrage ; une paire invalide fait sortir avec le code `1` (`Error: loading TLS certificate: …`). Redémarrez le serveur pour le changer. Consultez [Sécurité](../operations/security.md).
 
 ## Sortie
 
@@ -183,7 +183,7 @@ Assets Path : /srv/registry
 `Listen` montre le schéma et l'adresse réellement utilisés. Ensuite, une ligne par requête sur stderr :
 
 ```
-2026/10/10 10:56:15 INFO request method=PUT path=/sonarbridge/artifacts/v1.4.2/files/metadata.json status=201 bytes=112 duration=6.7ms remote=10.0.4.12
+2026/10/10 10:56:15 INFO request method=PUT path=/bridge/artifacts/v1.4.2/files/metadata.json status=201 bytes=112 duration=6.7ms remote=10.0.4.12
 ```
 
 `remote` est le pair TCP. `forwarded_for` est ajouté quand la requête porte `X-Forwarded-For`, tel qu'envoyé : il n'est pas considéré comme fiable. Une requête en échec ajoute une ligne `WARN` (4xx) ou `ERROR` (5xx) avec la cause exacte ; le client ne reçoit que le message documenté pour la route.

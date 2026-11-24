@@ -64,14 +64,14 @@ Raised when `artifacts.json` is uploaded, and again at publish. See [Upload rule
 | Status | Message | Cause | Fix |
 | --- | --- | --- | --- |
 | `422` | `artifacts.json is larger than 32 MiB` | Too large. | — |
-| `422` | `artifacts.json is not a JSON array of objects` | Not goreleaser's format. | Send `dist/artifacts.json` as goreleaser wrote it. |
+| `422` | `artifacts.json is not a JSON array of objects` | Not GoReleaser's format. | Send `dist/artifacts.json` as GoReleaser wrote it. |
 | `422` | `artifacts.json: entry <i> is null` | A `null` in the array. | Remove it. |
 | `422` | `artifacts.json: name, path and type must be strings: <reason>` | A field of the wrong type. | Fix the entry. |
 | `422` | `artifacts.json: a <type> entry has no name` | A published entry without `name`. | Fix the entry. |
 | `422` | `artifacts.json lists <name> twice` | Two published files with one name. | Rename them in `.goreleaser.yaml`. |
 | `422` | `artifacts.json lists "<name>", a name that cannot be uploaded` | An invalid or reserved name. | Rename the file. |
 | `422` | `artifacts.json references <name>, which is not uploaded: upload every file first, artifacts.json last` | `artifacts.json` sent before a file it lists, or that file is missing. | Upload the file, then `artifacts.json` again. |
-| `422` | `<name>: sha256 is <actual> but artifacts.json says <expected>` | The staged file is not the one goreleaser built. | Upload the right file. |
+| `422` | `<name>: sha256 is <actual> but artifacts.json says <expected>` | The staged file is not the one GoReleaser built. | Upload the right file. |
 
 ## Publish
 
@@ -81,12 +81,12 @@ Raised by `POST …/publish`, in this order. Nothing is published; staging is ke
 | --- | --- | --- | --- |
 | `422` | `several checksums files: <a> and <b>` | Two files ending in `checksums.txt`. | Keep one. |
 | `422` | `registry.yaml not uploaded: every version needs its product card` | No product card. | Upload `registry.yaml`, then publish again. |
-| `422` | `<checksums>: line <n> is not "<sha256>  <name>"` | A malformed line in the checksums file. | Send the file goreleaser or `sha256sum` wrote. |
+| `422` | `<checksums>: line <n> is not "<sha256>  <name>"` | A malformed line in the checksums file. | Send the file GoReleaser or `sha256sum` wrote. |
 | `422` | `<name> is not listed in <checksums>` | A staged file that the checksums file does not cover. | Add it to the checksums, or do not upload it; or send no checksums file and let publish write one. |
 | `422` | `<name>: sha256 is <actual> but <checksums> says <expected>` | The staged file differs from the checksums. | Upload the right file. |
-| `422` | `metadata.json is not valid JSON` | Corrupted `metadata.json`. | Send goreleaser's file, or none. |
-| `422` | `metadata.json has neither tag nor version` | Not goreleaser's `metadata.json`. | Send goreleaser's file, or none. |
-| `422` | `metadata.json describes <tag> (version <v>), not <version>` | `metadata.json` of another build. | Publish under the version goreleaser built, or send the right file. |
+| `422` | `metadata.json is not valid JSON` | Corrupted `metadata.json`. | Send GoReleaser's file, or none. |
+| `422` | `metadata.json has neither tag nor version` | Not GoReleaser's `metadata.json`. | Send GoReleaser's file, or none. |
+| `422` | `metadata.json describes <tag> (version <v>), not <version>` | `metadata.json` of another build. | Publish under the version GoReleaser built, or send the right file. |
 | `422` | `<name> is uploaded but artifacts.json does not list it` | With `artifacts.json`, a staged file it does not publish. | Remove the cause: list the file (`release.extra_files`) or do not upload it. |
 | `422` | `no artifact to publish: upload at least one file besides registry.yaml` | Only the card, notes, metadata, checksums or attachments were staged. | Upload the files of the release. |
 | `500` | `internal error` | Disk or permission error. When the server log says `version published but latest not updated` or `version published but index.json not updated`, the version **is** published. | Read the server log; see [Upload rules](./upload-rules.md). |

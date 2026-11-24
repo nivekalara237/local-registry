@@ -1,6 +1,6 @@
 ---
 title: Command line
-description: Every command, flag, environment variable and configuration key of the local-registry binary, with its exit codes.
+description: Every command, flag, environment variable and configuration key of the Local Registry binary, with its exit codes.
 sidebar_label: Command line
 ---
 
@@ -51,7 +51,7 @@ Flags are written `--port 8077` or `--port=8077`; a single dash (`-port`) is ref
 | `--min-free-mb` | `LOCAL_REGISTRY_MIN_FREE_MB` | `1024` | Disk space an upload must leave free, MiB. `0`: no check. |
 | `--staging-ttl` | `LOCAL_REGISTRY_STAGING_TTL` | `24h` | Purge staged versions untouched for this long. A Go duration: `0` (never) or at least `1h`. |
 | `--audit-log` | `LOCAL_REGISTRY_AUDIT_LOG` | `<asset-path>/bin.local/audit.log` | Audit log file. Refused inside `bin.local/assets/` or `assets/`, which are downloadable. |
-| `--public-url` | `LOCAL_REGISTRY_PUBLIC_URL` | — | Address clients reach the server at, such as `https://registry.example.com` (a path prefix is allowed). Makes the download URLs the server writes absolute. Empty: relative URLs. |
+| `--public-url` | `LOCAL_REGISTRY_PUBLIC_URL` | — | Address clients reach the server at, such as `https://registry.corp.example` (a path prefix is allowed). Makes the download URLs the server writes absolute. Empty: relative URLs. |
 | `--disable-generate-token` | `LOCAL_REGISTRY_DISABLE_GENERATE_TOKEN` | `true` | `=false`: generate a random upload token at startup when none is configured. |
 | *(no flag)* | `LOCAL_REGISTRY_UPLOAD_TOKEN` | — | Upload token; config key `upload-token`. Empty: upload is disabled (`403`). |
 
@@ -70,7 +70,7 @@ address: 0.0.0.0
 port: 8443
 tls-cert: /etc/local-registry/fullchain.pem
 tls-key: /etc/local-registry/privkey.pem
-public-url: https://registry.example.com:8443
+public-url: https://registry.corp.example:8443
 max-version-mb: 4096
 staging-ttl: 48h
 audit-log: /var/log/local-registry/audit.log
@@ -132,7 +132,7 @@ max-staging-mb          10240                               default
 min-free-mb             1024                                default
 staging-ttl             48h0m0s                             flag
 audit-log               /srv/registry/bin.local/audit.log   default
-public-url              https://registry.example.com        config file
+public-url              https://registry.corp.example        config file
 disable-generate-token  true                                default
 upload-token            set (token_id e2186dbdb1bb)         config file
 ```
@@ -154,7 +154,7 @@ Any error stops the program before it starts, with exit code `2`, `Error: <messa
 | `<setting> cannot be negative` | A negative quota. |
 | `staging-ttl must be 0 or at least 1h0m0s` | The purge could delete an upload still running: uploads may last 30 minutes. |
 | `audit-log <file> would be downloadable: put it outside bin.local/assets and assets` | Audit log inside a public tree. |
-| `public-url "<url>" must be an http or https URL with no user, query or fragment, such as https://registry.example.com` | Invalid `--public-url`. |
+| `public-url "<url>" must be an http or https URL with no user, query or fragment, such as https://registry.corp.example` | Invalid `--public-url`. |
 | `<setting>: "<value>" is not a whole number` | Unparsable number from the environment or the file. |
 | `staging-ttl: "<value>" is not a duration such as 90m or 24h` | Unparsable duration. |
 | `disable-generate-token: "<value>" is not true or false` | Unparsable boolean. |
@@ -183,7 +183,7 @@ Assets Path : /srv/registry
 `Listen` shows the actual scheme and bound address. Then one line per request on stderr:
 
 ```
-2026/10/10 10:56:15 INFO request method=PUT path=/sonarbridge/artifacts/v1.4.2/files/metadata.json status=201 bytes=112 duration=6.7ms remote=10.0.4.12
+2026/10/10 10:56:15 INFO request method=PUT path=/bridge/artifacts/v1.4.2/files/metadata.json status=201 bytes=112 duration=6.7ms remote=10.0.4.12
 ```
 
 `remote` is the TCP peer. `forwarded_for` is added when the request carries `X-Forwarded-For`, as sent: it is not trusted. A failed request adds a `WARN` (4xx) or `ERROR` (5xx) line with the exact cause; the client only gets the message documented for the route.

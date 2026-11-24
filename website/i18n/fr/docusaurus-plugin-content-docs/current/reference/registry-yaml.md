@@ -10,22 +10,22 @@ sidebar_label: registry.yaml
 
 ```yaml
 apiVersion: local-registry/v1
-displayName: SonarBridge
-description: Bridge between SonarQube and internal tools.
+displayName: Bridge
+description: "Sonar Bridge: bridge between SonarQube and internal tools."
 license: Proprietary                  # identifiant SPDX (MIT, Apache-2.0…) ou "Proprietary"
 owners:
   - name: Platform team
     email: platform@corp.example
 links:
-  - { name: source, url: https://git.corp.example/platform/sonarbridge }
-  - { name: docs,   url: https://docs.corp.example/sonarbridge }
+  - { name: source, url: https://git.corp.example/platform/sonar-bridge }
+  - { name: docs,   url: https://docs.corp.example/bridge }
 keywords: [sonar, cli]
 labels:                               # paires clé/valeur libres
   domain: quality
   cost-center: "4512"
 install: |                            # Markdown, affiché tel quel
-  curl -fsSL https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz | tar xz
-deprecated: false                     # ou un message : "replaced by sonarbridge2"
+  curl -fsSL https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_linux_amd64.tar.gz | tar xz
+deprecated: false                     # ou un message : "replaced by bridge2"
 ```
 
 La plus petite fiche valide tient en une ligne :
@@ -59,7 +59,7 @@ Le fichier entier fait au plus 64 Kio et contient un seul document YAML. Toute a
 | `deprecated` | `release.json` de la version, et son entrée dans `index.json`. |
 | tous les autres champs | `index.json` et `GET /products`, à partir de la fiche de la dernière version (sinon de la version publiée en dernier). |
 
-Voir [release.json](./release-json.md) et [index.json](./index-json.md).
+Consultez [release.json](./release-json.md) et [index.json](./index-json.md).
 
 ## Validation
 
@@ -88,10 +88,10 @@ Le fichier est validé au dépôt (`PUT …/files/registry.yaml`), puis de nouve
 
 ## Schéma JSON
 
-[`schema/registry.schema.json`](https://github.com/nivekalara237/local-registry/blob/main/schema/registry.schema.json) (JSON Schema 2020-12) décrit les mêmes règles, pour que la CI puisse vérifier le fichier avant de l'envoyer. Un test du projet vérifie que le schéma et le serveur acceptent les mêmes clés.
+[`schema/registry.schema.json`](https://github.com/nivekalara237/local-registry/blob/main/schema/registry.schema.json) (JSON Schema 2020-12) décrit les mêmes règles, pour que la CI puisse vérifier le fichier avant de l'envoyer. Le schéma et le serveur acceptent les mêmes clés.
 
 ```sh
 check-jsonschema --schemafile schema/registry.schema.json registry.yaml
 ```
 
-Le schéma est aussi livré dans chaque archive de version de local-registry.
+Le schéma est aussi livré dans chaque archive de version de Local Registry.

@@ -1,26 +1,26 @@
 ---
 title: Sécurité
-description: Le modèle de sécurité de local-registry, ce qui est public, le fonctionnement du token d'upload, et le déploiement derrière HTTPS.
+description: Le modèle de sécurité de Local Registry, ce qui est public, le fonctionnement du token d'upload, et le déploiement derrière HTTPS.
 ---
 
-Cette page décrit ce que local-registry protège, ce qu'il laisse ouvert volontairement, et comment le déployer sans risque. Lisez-la avant d'exposer le serveur au-delà de `localhost`.
+Cette page décrit ce que Local Registry protège, ce qu'il laisse ouvert volontairement, et comment le déployer sans risque. Lisez-la avant d'exposer le serveur au-delà de `localhost`.
 
 ## Le modèle en un tableau
 
 | Action | Qui peut la faire | Protection |
 | --- | --- | --- |
 | Lire le catalogue, `release.json`, `index.json` | Quiconque atteint le serveur | Aucune : les lectures sont publiques. |
-| Télécharger un fichier publié | Quiconque atteint le serveur | Aucune. L'intégrité vient des checksums sha256. Voir [Intégrité](../concepts/integrity.md). |
+| Télécharger un fichier publié | Quiconque atteint le serveur | Aucune. L'intégrité vient des checksums sha256. Consultez [Intégrité](../concepts/integrity.md). |
 | Envoyer des fichiers, publier une version | Les détenteurs du token d'upload | `Authorization: Bearer <token>`, comparé en temps constant. |
 | Modifier ou supprimer une version publiée | Personne par l'API | Les versions publiées sont immuables (`409`). Seule une personne ayant accès au disque peut les modifier. |
 | Lire le journal d'audit, la zone de staging | Personne par l'API | Jamais servis. |
 
 > [!IMPORTANT]
-> local-registry n'a pas d'authentification en lecture. Placez-le sur un réseau privé, ou derrière un proxy qui authentifie les lecteurs, si vos releases sont confidentielles.
+> Local Registry n'a pas d'authentification en lecture. Placez-le sur un réseau privé, ou derrière un proxy qui authentifie les lecteurs, si vos releases sont confidentielles.
 
 ## Le token d'upload
 
-Il y a un token d'upload par serveur : un secret partagé que chaque publieur présente.
+Il y a un token d'upload par serveur : un secret partagé que chaque éditeur présente.
 
 - **D'où il vient** : `LOCAL_REGISTRY_UPLOAD_TOKEN`, sinon la clé `upload-token` du fichier de configuration. Il n'y a pas de flag, car les flags apparaissent dans `ps`.
 - **Sans token**, l'upload est désactivé : les routes d'upload répondent `403 upload is disabled: no token configured`, et le démarrage affiche `LOCAL_REGISTRY_UPLOAD_TOKEN is not set: upload is disabled`. C'est le bon réglage pour un miroir en lecture seule.
@@ -39,27 +39,27 @@ Il y a un token d'upload par serveur : un secret partagé que chaque publieur pr
 openssl rand -hex 32
 ```
 
-Rangez-le dans votre gestionnaire de secrets, puis transmettez-le au serveur et aux pipelines CI qui publient :
+Rangez-le dans un gestionnaire de secrets, puis transmettez-le au serveur et à ce qui publie (machines, pipelines CI) :
 
 - systemd : dans le fichier de configuration, appartenant à l'utilisateur du service, mode `0600` ;
 - Docker : `-e LOCAL_REGISTRY_UPLOAD_TOKEN` depuis l'environnement du shell ou de votre orchestrateur ;
 - Kubernetes : un `Secret`, lu par `secretKeyRef` (voir [Installation](install.md)) ;
 - CI : une variable secrète, masquée et protégée.
 
-Les clients doivent envoyer le token sur l'entrée standard, jamais en argument de commande. Les [scripts d'upload](../reference/scripts.md) le font déjà :
+Les clients ne doivent jamais passer le token en argument de commande. [`localrectl`](../reference/localrectl.md) le lit dans `LOCAL_REGISTRY_UPLOAD_TOKEN` et ne l'affiche jamais. Avec curl, envoyez-le sur l'entrée standard :
 
 ```sh
 printf 'Authorization: Bearer %s\n' "$LOCAL_REGISTRY_UPLOAD_TOKEN" |
-  curl -fsS -H @- -X POST "https://registry.example.com/my-product/artifacts/v1.2.0/publish"
+  curl -fsS -H @- -X POST "https://registry.corp.example/my-product/artifacts/v1.2.0/publish"
 ```
 
 ### Changer de token
 
 Le serveur lit le token au démarrage.
 
-1. Générez un nouveau token et rangez-le dans votre gestionnaire de secrets.
+1. Générez un nouveau token et rangez-le dans un gestionnaire de secrets.
 2. Mettez à jour la configuration ou le secret du serveur, puis redémarrez-le. Les uploads en staging survivent au redémarrage.
-3. Mettez à jour les secrets de la CI. Les publieurs qui utilisent encore l'ancien token reçoivent `401`.
+3. Mettez à jour le token partout où vous publiez, par exemple dans les secrets de la CI. Les éditeurs qui utilisent encore l'ancien token reçoivent `401`.
 
 Le nouveau `token_id` apparaît dans les logs à partir du redémarrage : vous distinguez les versions publiées avant et après le changement.
 
@@ -96,7 +96,7 @@ Terminez TLS dans votre load balancer, votre contrôleur Ingress ou votre proxy,
 | Délais de lecture et d'envoi sur `/…/artifacts/…/files/…` et `/…/publish` | Jusqu'à 30 minutes, la limite d'upload du serveur. |
 | Mise en mémoire tampon des requêtes | Désactivée pour les uploads si votre proxy le permet, pour que les gros fichiers passent en flux. |
 
-Réglez ensuite `public-url` sur l'adresse qu'utilisent les clients (`https://registry.example.com`), pour que les URL de téléchargement écrites par le registre pointent vers le proxy.
+Réglez ensuite `public-url` sur l'adresse qu'utilisent les clients (`https://registry.corp.example`), pour que les URL de téléchargement écrites par le registre pointent vers le proxy.
 
 Le serveur journalise l'en-tête `X-Forwarded-For` qu'il reçoit, dans `forwarded_for`, sans lui faire confiance : le champ `remote` est toujours le pair TCP, ici votre proxy.
 
@@ -126,6 +126,6 @@ N'accordez l'écriture dans l'asset path qu'à l'utilisateur du service. Qui peu
 - [ ] Le service tourne sous un utilisateur dédié et sans privilège (`registry`, uid `10001` dans l'image).
 - [ ] L'asset path et le fichier de configuration appartiennent à cet utilisateur seul ; le fichier est en mode `0600`.
 - [ ] L'accès en lecture est restreint au niveau réseau si les releases sont confidentielles.
-- [ ] Le journal d'audit est collecté et conservé. Voir [Journal d'audit](audit-log.md).
-- [ ] Les images conteneur sont épinglées sur une version exacte et leur signature est vérifiée. Voir [Installation](install.md).
+- [ ] Le journal d'audit est collecté et conservé. Consultez [Journal d'audit](audit-log.md).
+- [ ] Les images conteneur sont épinglées sur une version exacte et leur signature est vérifiée. Consultez [Installation](install.md).
 - [ ] Un serveur par asset path.

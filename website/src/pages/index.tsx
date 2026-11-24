@@ -14,8 +14,8 @@ const paths: Path[] = [
     title: <Translate id="home.publish.title">I publish releases</Translate>,
     body: (
       <Translate id="home.publish.body">
-        Send a goreleaser build, or any set of files, from your laptop or your CI. Every version is checked and
-        published atomically.
+        Send a GoReleaser build, or any set of files, from your laptop or your CI with localrectl. Every version is
+        checked and published atomically.
       </Translate>
     ),
     to: '/docs/guides/publish-with-goreleaser',
@@ -25,8 +25,8 @@ const paths: Path[] = [
     title: <Translate id="home.operate.title">I run the registry</Translate>,
     body: (
       <Translate id="home.operate.body">
-        One static binary, no database. Install it, secure it with a token and HTTPS, set quotas, read the audit
-        log.
+        On your own server or for a team. One static binary, no database. Install it, secure it with a token and HTTPS, set
+        quotas, read the audit log.
       </Translate>
     ),
     to: '/docs/operations/install',
@@ -54,7 +54,7 @@ export default function Home(): ReactNode {
           <Heading as="h1">{siteConfig.title}</Heading>
           <p className={styles.tagline}>
             <Translate id="home.tagline">
-              A private release registry for goreleaser builds and any versioned files.
+              An open source release registry, for GoReleaser builds and any versioned files.
             </Translate>
           </p>
           <div className={styles.buttons}>
@@ -62,7 +62,7 @@ export default function Home(): ReactNode {
               <Translate id="home.quickstart">Quick start, 5 minutes</Translate>
             </Link>
             <Link className="button button--secondary button--lg" to="/docs/intro">
-              <Translate id="home.what">What is local-registry?</Translate>
+              <Translate id="home.what">What is Local Registry?</Translate>
             </Link>
           </div>
         </div>

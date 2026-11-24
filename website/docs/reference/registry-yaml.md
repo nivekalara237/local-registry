@@ -10,22 +10,22 @@ sidebar_label: registry.yaml
 
 ```yaml
 apiVersion: local-registry/v1
-displayName: SonarBridge
-description: Bridge between SonarQube and internal tools.
+displayName: Bridge
+description: "Sonar Bridge: bridge between SonarQube and internal tools."
 license: Proprietary                  # SPDX identifier (MIT, Apache-2.0…) or "Proprietary"
 owners:
   - name: Platform team
     email: platform@corp.example
 links:
-  - { name: source, url: https://git.corp.example/platform/sonarbridge }
-  - { name: docs,   url: https://docs.corp.example/sonarbridge }
+  - { name: source, url: https://git.corp.example/platform/sonar-bridge }
+  - { name: docs,   url: https://docs.corp.example/bridge }
 keywords: [sonar, cli]
 labels:                               # free key/value pairs
   domain: quality
   cost-center: "4512"
 install: |                            # Markdown, shown as is
-  curl -fsSL https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz | tar xz
-deprecated: false                     # or a message: "replaced by sonarbridge2"
+  curl -fsSL https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_linux_amd64.tar.gz | tar xz
+deprecated: false                     # or a message: "replaced by bridge2"
 ```
 
 The smallest valid card is one line:
@@ -88,10 +88,10 @@ At publish, a version without the file answers `422 registry.yaml not uploaded: 
 
 ## JSON Schema
 
-[`schema/registry.schema.json`](https://github.com/nivekalara237/local-registry/blob/main/schema/registry.schema.json) (JSON Schema 2020-12) describes the same rules, so that CI can check the file before sending it. A test of the project checks that the schema and the server accept the same keys.
+[`schema/registry.schema.json`](https://github.com/nivekalara237/local-registry/blob/main/schema/registry.schema.json) (JSON Schema 2020-12) describes the same rules, so that CI can check the file before sending it. The schema and the server accept the same keys.
 
 ```sh
 check-jsonschema --schemafile schema/registry.schema.json registry.yaml
 ```
 
-The schema is also shipped in every release archive of local-registry.
+The schema is also shipped in every release archive of Local Registry.

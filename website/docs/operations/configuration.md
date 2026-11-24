@@ -35,7 +35,7 @@ address: 0.0.0.0
 port: 8443
 tls-cert: /etc/local-registry/fullchain.pem
 tls-key: /etc/local-registry/privkey.pem
-public-url: https://registry.example.com:8443
+public-url: https://registry.corp.example:8443
 max-version-mb: 4096
 staging-ttl: 48h
 audit-log: /var/log/local-registry/audit.log
@@ -79,7 +79,7 @@ max-staging-mb          10240                               default
 min-free-mb             1024                                default
 staging-ttl             48h0m0s                             config file
 audit-log               /var/log/local-registry/audit.log   config file
-public-url              https://registry.example.com:8443   config file
+public-url              https://registry.corp.example:8443   config file
 disable-generate-token  true                                default
 upload-token            set (token_id e2186dbdb1bb)         config file
 ```
@@ -95,7 +95,7 @@ upload-token            set (token_id e2186dbdb1bb)         config file
 | `address` | `localhost` | Only local clients can connect by default. Set `0.0.0.0` (or one interface) to serve the network. |
 | `port` | `8077` | `0` picks a free port: useful in tests only. |
 | `tls-cert`, `tls-key` | none | Both or neither. With them, the server speaks HTTPS only. Without them, put a TLS reverse proxy in front. See [Security](security.md). |
-| `public-url` | none | The address clients use, such as `https://registry.example.com`. It makes download URLs absolute. Set it whenever the server sits behind a proxy or another host name. `artifacts.json` and `release.json` are written at publish time, so they change only for versions published after you set it; `POST /releases/…` uses it at once. |
+| `public-url` | none | The address clients use, such as `https://registry.corp.example`. It makes download URLs absolute. Set it whenever the server sits behind a proxy or another host name. `artifacts.json` and `release.json` are written at publish time, so they change only for versions published after you set it; `POST /releases/…` uses it at once. |
 | `upload-token` | none | Without it, the registry is read-only: upload routes answer `403`. |
 | `audit-log` | `<asset-path>/bin.local/audit.log` | Move it to your log volume if you collect logs there. It cannot be placed in a public tree. See [Audit log](audit-log.md). |
 | Quotas and `staging-ttl` | see [Quotas and staging](quotas-and-staging.md) | Protect the disk from oversized or abandoned uploads. |
@@ -117,7 +117,7 @@ Any configuration error stops the program before it listens, with `Error: <messa
 | `tls-cert and tls-key go together` | Set both, or neither. |
 | `staging-ttl must be 0 or at least 1h0m0s` | An upload may last 30 minutes: a shorter TTL could purge it while it runs. |
 | `audit-log … would be downloadable: put it outside bin.local/assets and assets` | Move the audit log out of the public trees. |
-| `public-url "…" must be an http or https URL with no user, query or fragment, …` | Use a plain address such as `https://registry.example.com` (a path prefix is allowed). |
+| `public-url "…" must be an http or https URL with no user, query or fragment, …` | Use a plain address such as `https://registry.corp.example` (a path prefix is allowed). |
 | `config file <file>: unknown setting "…"` | Fix the key name. |
 
 The complete list is in the [command-line reference](../reference/cli.md).

@@ -11,7 +11,7 @@ const repo = 'https://github.com/nivekalara237/local-registry';
 
 const config: Config = {
   title: 'Local Registry',
-  tagline: 'A private release registry for builds and any versioned files',
+  tagline: 'An open source release registry for builds and any versioned files',
   favicon: 'img/favicon.ico',
   future: {v4: true},
   url,

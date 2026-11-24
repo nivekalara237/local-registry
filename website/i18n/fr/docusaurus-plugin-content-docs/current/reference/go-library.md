@@ -1,6 +1,6 @@
 ---
 title: Bibliothèque Go
-description: Embarquer local-registry dans un programme Go, ou lire directement son stockage, avec l'API exportée du paquet racine.
+description: Embarquer Local Registry dans un programme Go, ou lire directement son stockage, avec l'API exportée du paquet racine.
 sidebar_label: Bibliothèque Go
 ---
 
@@ -27,7 +27,7 @@ import (
 )
 
 func main() {
-	const publicURL = "https://registry.example.com"
+	const publicURL = "https://registry.corp.example"
 
 	s := localregistry.NewLocalRegistryServer(8077, "0.0.0.0", "/srv/registry")
 	if err := s.SetTLS("/etc/local-registry/fullchain.pem", "/etc/local-registry/privkey.pem"); err != nil { // facultatif
@@ -70,7 +70,7 @@ Un nouveau serveur n'a **aucune route** : enregistrez les groupes dont vous avez
 | `SetTLS(certFile, keyFile string) error` | HTTPS uniquement, TLS 1.2 ou plus. La paire est chargée immédiatement : un mauvais fichier échoue ici. |
 | `TLSEnabled() bool` | Si `SetTLS` a réussi. |
 | `SetAuditLog(a *AuditLog)` | Envoie les événements d'audit à `a`. Sans lui, ils vont à `slog` (message `audit`). |
-| `AddUploadRoutes(cfg UploadConfig)` | `PUT …/files/{name}`, `POST …/publish`, `GET …/files/{name}`. Voir [API de dépôt](./api/upload.md). |
+| `AddUploadRoutes(cfg UploadConfig)` | `PUT …/files/{name}`, `POST …/publish`, `GET …/files/{name}`. Consultez [API de dépôt](./api/upload.md). |
 | `AddReleaseRoutes(publicURL string)` | `POST /releases/{product}/{version}`, `POST /releases/{version}`, `GET /artifacts/metadatas/{product}`. |
 | `AddProductRoutes()` | `GET /products`, `GET /products/search`, `GET /{product}/index`, `GET /{product}/releases/{version}`. |
 | `AddFileRoute(uri, method, varName string)` | Sert le fichier public nommé par la variable de chemin `varName`, comme `/assets/binary`. |
@@ -121,11 +121,11 @@ Ces fonctions lisent l'arborescence directement, comme le font les routes.
 
 ```go
 l := localregistry.NewLayout("/srv/registry")
-v, err := localregistry.LatestVersion(l, "sonarbridge")
+v, err := localregistry.LatestVersion(l, "bridge")
 if errors.Is(err, localregistry.ErrNotFound) {
 	// pas de dernière version
 }
-raw, err := localregistry.ReadReleaseDocument(l, "sonarbridge", v)
+raw, err := localregistry.ReadReleaseDocument(l, "bridge", v)
 var doc localregistry.ReleaseDocument
 err = json.Unmarshal(raw, &doc)
 ```

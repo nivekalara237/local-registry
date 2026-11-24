@@ -7,10 +7,10 @@ Everything on the registry belongs to a **product**, and every product is a seri
 
 ## Product
 
-A product is what a team delivers and versions: a CLI tool (`sonarbridge`), an agent (`billing-agent`), database migrations (`billing-db-migrations`), a policy bundle (`security-policies`).
+A product is what you deliver and version: a CLI tool (`bridge`), an agent (`billing-agent`), database migrations (`billing-db-migrations`), a policy bundle (`security-policies`).
 
 - You do not declare a product in advance. It exists as soon as its first version is published.
-- Its name is the first segment of every URL: `/sonarbridge/…`.
+- Its name is the first segment of every URL: `/bridge/…`.
 - It is described by a **product card**, the `registry.yaml` uploaded with each version. See [The local-registry/v1 standard](./standard-v1.md).
 
 ## Version
@@ -19,11 +19,11 @@ A version is one published release of a product, usually named after its git tag
 
 ```mermaid
 flowchart LR
-    P["product<br/>sonarbridge"] --> V1["v1.4.1"]
+    P["product<br/>bridge"] --> V1["v1.4.1"]
     P --> V2["v1.4.2<br/>(latest)"]
     P --> V3["v1.5.0-rc.1<br/>(pre-release)"]
-    V2 --> F1["sonarbridge_1.4.2_linux_amd64.tar.gz"]
-    V2 --> F2["sonarbridge_1.4.2_checksums.txt"]
+    V2 --> F1["bridge_1.4.2_linux_amd64.tar.gz"]
+    V2 --> F2["bridge_1.4.2_checksums.txt"]
     V2 --> F3["release.json"]
 ```
 
@@ -38,7 +38,7 @@ A version whose name is a semver pre-release (`v1.5.0-rc.1`, `2.0.0-beta`) is fl
 
 ### Deprecation
 
-A product card can mark the version it ships with as deprecated, with `deprecated: true` or a message such as `"replaced by sonarbridge2"`. The flag is per version: it shows in that version's `release.json` and in its entry of the product index.
+A product card can mark the version it ships with as deprecated, with `deprecated: true` or a message such as `"replaced by bridge2"`. The flag is per version: it shows in that version's `release.json` and in its entry of the product index.
 
 ## Names
 
@@ -60,7 +60,7 @@ A name outside these rules answers `404` on read routes and `400` on upload rout
 Every route is built from these names:
 
 ```
-https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz
+https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_linux_amd64.tar.gz
                              └─product──┘          └version┘     └─────────file name────────────────┘
 ```
 
@@ -68,10 +68,10 @@ https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.
 | --- | --- |
 | `/products` | Every product |
 | `/products/search?keyword=db` | The products that match criteria, page by page |
-| `/sonarbridge/index` | The product card and its versions |
-| `/sonarbridge/releases/v1.4.2` | The description of one version |
-| `/sonarbridge/releases/latest` | The description of the latest version |
-| `/sonarbridge/artifacts/v1.4.2/files/<name>` | One file |
+| `/bridge/index` | The product card and its versions |
+| `/bridge/releases/v1.4.2` | The description of one version |
+| `/bridge/releases/latest` | The description of the latest version |
+| `/bridge/artifacts/v1.4.2/files/<name>` | One file |
 
 The complete list is in the [HTTP API reference](../reference/api/index.md).
 

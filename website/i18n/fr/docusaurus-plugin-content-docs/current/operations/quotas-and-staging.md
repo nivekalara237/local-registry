@@ -3,7 +3,7 @@ title: Quotas et staging
 description: Dimensionner la zone de staging, protéger le disque, et laisser le serveur purger les uploads abandonnés.
 ---
 
-Les fichiers envoyés attendent dans une zone de staging jusqu'à la publication de la version. Les quotas limitent ce que cette zone peut contenir, et une purge retire les uploads que personne n'a terminés. Ajustez-les quand vos releases sont volumineuses, ou quand beaucoup d'équipes publient en même temps.
+Les fichiers envoyés attendent dans une zone de staging jusqu'à la publication de la version. Les quotas limitent ce que cette zone peut contenir, et une purge retire les uploads que personne n'a terminés. Ajustez-les quand vos releases sont volumineuses, ou quand beaucoup d'éditeurs envoient des versions en même temps.
 
 Pour le fonctionnement du staging et de la publication, voir [Staging et publication](../concepts/staging-and-publish.md).
 
@@ -30,12 +30,12 @@ Comment les quotas comptent :
 ### Choisir les valeurs
 
 - Réglez `max-upload-mb` au-dessus de votre plus gros fichier, en général la plus grosse archive ou le plus gros paquet.
-- Réglez `max-version-mb` au-dessus de la taille totale d'une release, et `max-version-files` au-dessus de son nombre de fichiers. Une release goreleaser avec beaucoup de plateformes, de SBOM et de signatures peut dépasser 100 fichiers.
+- Réglez `max-version-mb` au-dessus de la taille totale d'une release, et `max-version-files` au-dessus de son nombre de fichiers. Une release GoReleaser avec beaucoup de plateformes, de SBOM et de signatures peut dépasser 100 fichiers.
 - Réglez `max-staging-mb` sur ce que vous acceptez sur disque pour le travail non publié : environ le nombre de versions publiées en même temps, multiplié par la taille d'une version.
 - Gardez `min-free-mb` assez grand pour que le serveur finisse de publier et d'écrire ses logs.
 
 ```yaml
-# Grosses releases, plusieurs équipes qui publient en même temps
+# Grosses releases, plusieurs éditeurs en même temps
 max-upload-mb: 1024
 max-version-mb: 8192
 max-version-files: 300
@@ -68,7 +68,7 @@ Pour libérer de la place tout de suite, supprimez la version en staging pendant
 rm -rf /srv/registry/bin.local/.uploads/<product>/<version>
 ```
 
-Pour corriger une publication refusée, gardez au contraire le staging : envoyez le fichier manquant ou corrigé sous le même nom, puis publiez de nouveau. Voir [Dépannage](../troubleshooting.md).
+Pour corriger une publication refusée, gardez au contraire le staging : envoyez le fichier manquant ou corrigé sous le même nom, puis publiez de nouveau. Consultez [Dépannage](../troubleshooting.md).
 
 ## Surveiller la zone de staging
 

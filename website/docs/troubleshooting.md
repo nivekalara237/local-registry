@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-description: Symptoms, causes and fixes for the problems met when running local-registry and publishing to it.
+description: Symptoms, causes and fixes for the problems met when running Local Registry and publishing to it.
 ---
 
 Find your symptom below: each row gives the cause and the fix. Most messages come straight from the server or the scripts. For the complete list of error messages, by route, see the [error reference](reference/errors.md).
@@ -29,17 +29,17 @@ Find your symptom below: each row gives the cause and the fix. Most messages com
 | `403 upload is disabled: no token configured` | The server has no upload token. Startup printed `LOCAL_REGISTRY_UPLOAD_TOKEN is not set: upload is disabled`. | Set `LOCAL_REGISTRY_UPLOAD_TOKEN` or `upload-token` for the server, then restart. Check with `local-registry config`. |
 | `401 invalid or missing bearer token` | Wrong token, wrong header, or a token changed without a restart. | Send exactly `Authorization: Bearer <token>`, with no extra space or newline. Compare `token_id` values: see [Security](operations/security.md). |
 | `WARN upload token generation skipped …` | `--disable-generate-token=false` while a token is configured. The configured one stays in use. | Expected. Drop the flag, or unset the configured token to get a generated one. |
-| `curl: (60) SSL certificate problem` | Self-signed or private certificate authority. | `curl --cacert ca.pem`, or `export CURL_CA_BUNDLE=ca.pem` for the scripts. |
+| `curl: (60) SSL certificate problem` | Self-signed or private certificate authority. | `curl --cacert ca.pem`; for `localrectl`, `--server-ca-file ca.pem` or `LOCAL_REGISTRY_CA_FILE=ca.pem`. |
 | `400 Client sent an HTTP request to an HTTPS server.` | Plain HTTP to a server running TLS. | Use `https://`. |
 
 ## Upload and publish
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `422 registry.yaml not uploaded: every version needs its product card` | No product card in staging. | Add a `registry.yaml` (see [Write registry.yaml](guides/write-registry-yaml.md)), or pass `upload.sh --product-file`. Then publish again: the rest of the staging is kept. |
+| `422 registry.yaml not uploaded: every version needs its product card` | No product card in staging. | Add a `registry.yaml` (see [Write registry.yaml](guides/write-registry-yaml.md)), or pass `--product-file` to `localrectl`. Then publish again: the rest of the staging is kept. |
 | `422 no artifact to publish: upload at least one file besides registry.yaml` | Staging holds only documents: `registry.yaml`, `metadata.json`, `CHANGELOG.md`, checksums. | Upload the files you deliver themselves. |
-| `422 artifacts.json references <name>, which is not uploaded` | `artifacts.json` was sent before a file it lists. | Send that file, then `artifacts.json` again. `upload.sh` sends files in the right order. |
-| `422 <name> is uploaded but artifacts.json does not list it` | An extra file in staging: an earlier attempt, a raw build binary. | Remove the staging (`bin.local/.uploads/<product>/<version>`) and upload again, or use `upload.sh`. |
+| `422 artifacts.json references <name>, which is not uploaded` | `artifacts.json` was sent before a file it lists. | Send that file, then `artifacts.json` again. |
+| `422 <name> is uploaded but artifacts.json does not list it` | An extra file in staging: an earlier attempt, a raw build binary. | Remove the staging (`bin.local/.uploads/<product>/<version>`) and upload again. |
 | `422 <name> is not listed in <checksums>` | A file the checksums file does not cover. | Do not send it, have your build checksum it, or send no checksums file: publish then writes one. |
 | `422 <name>: sha256 is … but … says …` | The file changed after its checksum was computed, or the wrong file was sent. | Send the right file. |
 | `422 metadata.json describes …, not …` | The version in the URL is not the tag in `metadata.json`. | Publish under the tag. The scripts read it from `metadata.json`. |
@@ -53,15 +53,15 @@ Find your symptom below: each row gives the cause and the fix. Most messages com
 | Upload cut through a reverse proxy (`413` or `504` from the proxy) | The proxy limits the body size or the duration. | Raise the proxy's body size limit and timeouts. See [Security](operations/security.md). |
 | Downloaded file starts with `--------------------------` | The file was uploaded with `curl -F` (multipart). | Upload with `curl -T file`. |
 
-## Scripts
+## localrectl
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `upload.sh: <name>: <path> not found (wrong --root?)` | The `path` fields of `artifacts.json` are relative to goreleaser's working directory, not to where you run the script. | Pass `--root <goreleaser working directory>`, or run the script from there. |
-| `upload.sh: … not found` for files of another project | No `artifacts.json` argument: the script took `dist/artifacts.json` of the current directory. | Pass the `artifacts.json` or the directory to publish. With `--root DIR` and no file, the script reads `DIR/dist/artifacts.json`, else publishes `DIR` itself. |
-| `upload.sh: <dir> is a directory: archive it first …` | The directory to publish holds a subdirectory. The registry stores flat files. | Archive the subdirectory, for example `tar czf name.tar.gz -C dir name`. See [Publish plain files](guides/publish-plain-files.md). |
-| `upload.sh: no registry.yaml in … : pass --product-file` | No product card found. | Pass `--product-file path/to/registry.yaml`. |
-| On Windows, output lines start with `)` and uploads fail with `400 Bad Request` | A native `jq.exe` ends its lines with CRLF; the CR ends up in names and URLs. | Use the current `upload.sh`, which removes the CRs. See [Windows](guides/windows.md). |
+| `already published` | The version is already published: a version never changes. | Publish a new version. In a CI job that may run twice, add `--if-exists skip`. |
+| The directory to publish holds a subdirectory | The registry stores flat files. | Archive the subdirectory, for example `tar czf name.tar.gz -C dir name`, or add `--compress-subdirs` (or `--skip-subdirs`). See [Publish plain files](guides/publish-plain-files.md). |
+| `--product-file` or `--version` is missing | Both are required, except `--version` for a GoReleaser build whose `metadata.json` gives the version. | Add the missing option. |
+| TLS error against a registry with a private certificate | `localrectl` does not trust the private CA that signed the certificate. | Pass the CA certificate with `--server-ca-file` or `LOCAL_REGISTRY_CA_FILE`. |
+| Exit code `2` | Wrong use of the command: unknown flag, missing argument, wrong setting. | Check the command with `--help`, and the settings in use with `localrectl config`. |
 
 ## Reads and downloads
 

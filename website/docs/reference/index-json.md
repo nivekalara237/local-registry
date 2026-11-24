@@ -11,15 +11,15 @@ sidebar_label: index.json
 ```json
 {
   "apiVersion": "local-registry/v1",
-  "product": "sonarbridge",
-  "displayName": "SonarBridge",
-  "description": "Bridge between SonarQube and internal tools.",
+  "product": "bridge",
+  "displayName": "Bridge",
+  "description": "Sonar Bridge: bridge between SonarQube and internal tools.",
   "license": "Proprietary",
   "owners": [{ "name": "Platform team", "email": "platform@corp.example" }],
-  "links": [{ "name": "source", "url": "https://git.corp.example/platform/sonarbridge" }],
+  "links": [{ "name": "source", "url": "https://git.corp.example/platform/sonar-bridge" }],
   "keywords": ["sonar", "cli"],
   "labels": { "domain": "quality" },
-  "install": "curl -fsSL https://registry.example.com/… | tar xz\n",
+  "install": "curl -fsSL https://registry.corp.example/… | tar xz\n",
   "latest": "v1.4.2",
   "updatedAt": "2026-10-12T08:00:00Z",
   "versions": [

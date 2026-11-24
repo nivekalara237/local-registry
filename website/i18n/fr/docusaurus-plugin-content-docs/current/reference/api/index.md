@@ -1,14 +1,14 @@
 ---
 title: API HTTP
-description: Conventions communes à toutes les routes de l'API HTTP de local-registry, et liste de toutes les routes.
+description: Conventions communes à toutes les routes de l'API HTTP de Local Registry, et liste de toutes les routes.
 sidebar_label: Vue d'ensemble
 ---
 
-L'API HTTP de local-registry sert les versions publiées et en accepte de nouvelles. Cette page donne les règles que suivent toutes les routes ; chaque groupe de routes a sa propre page.
+L'API HTTP de Local Registry sert les versions publiées et en accepte de nouvelles. Cette page donne les règles que suivent toutes les routes ; chaque groupe de routes a sa propre page.
 
 ## URL de base
 
-Par défaut, le serveur écoute sur `http://localhost:8077` (`--address`, `--port`), ou en `https://` quand TLS est activé. Derrière un reverse proxy, renseignez `--public-url` (par exemple `https://registry.example.com`) : les URL de téléchargement que le serveur écrit (`release.json`, `artifacts.json` réécrit, réponses de `POST /releases`) deviennent alors des URL absolues sous cette adresse. Sans cette option, ce sont des chemins relatifs comme `/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz`.
+Par défaut, le serveur écoute sur `http://localhost:8077` (`--address`, `--port`), ou en `https://` quand TLS est activé. Derrière un reverse proxy, renseignez `--public-url` (par exemple `https://registry.corp.example`) : les URL de téléchargement que le serveur écrit (`release.json`, `artifacts.json` réécrit, réponses de `POST /releases`) deviennent alors des URL absolues sous cette adresse. Sans cette option, ce sont des chemins relatifs comme `/bridge/artifacts/v1.4.2/files/bridge_1.4.2_linux_amd64.tar.gz`.
 
 ## Routes
 
@@ -53,7 +53,7 @@ Toute route `GET` répond aussi à `HEAD`. Une mauvaise méthode répond `405` a
 Les routes JSON répondent `Content-Type: application/json`. En cas d'erreur, le corps est :
 
 ```json
-{"error": "version sonarbridge/v1.4.2 is already published and cannot be changed"}
+{"error": "version bridge/v1.4.2 is already published and cannot be changed"}
 ```
 
 Les routes de fichiers (téléchargements) et les erreurs de routage répondent en texte brut.
@@ -78,13 +78,13 @@ Le message `error` est destiné aux humains et aux scripts. Pour un `500`, il va
 
 ## Authentification
 
-`PUT` et `publish` exigent `Authorization: Bearer <token>`, comparé en temps constant avant toute autre chose. Voir [Dépôt](./upload.md).
+`PUT` et `publish` exigent `Authorization: Bearer <token>`, comparé en temps constant avant toute autre chose. Consultez [Dépôt](./upload.md).
 
 Passez l'en-tête à curl sur son entrée standard, pour que le jeton n'apparaisse jamais dans la liste des processus :
 
 ```sh
 printf 'Authorization: Bearer %s\n' "$LOCAL_REGISTRY_UPLOAD_TOKEN" |
-  curl -fsS -H @- -X POST https://registry.example.com/sonarbridge/artifacts/v1.4.2/publish
+  curl -fsS -H @- -X POST https://registry.corp.example/bridge/artifacts/v1.4.2/publish
 ```
 
 ## Fraîcheur

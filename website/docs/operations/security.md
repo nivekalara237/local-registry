@@ -1,9 +1,9 @@
 ---
 title: Security
-description: The security model of local-registry, what is public, how the upload token works, and how to deploy behind HTTPS.
+description: The security model of Local Registry, what is public, how the upload token works, and how to deploy behind HTTPS.
 ---
 
-This page describes what local-registry protects, what it leaves open on purpose, and how to deploy it safely. Read it before you expose the server beyond `localhost`.
+This page describes what Local Registry protects, what it leaves open on purpose, and how to deploy it safely. Read it before you expose the server beyond `localhost`.
 
 ## The model in one table
 
@@ -16,7 +16,7 @@ This page describes what local-registry protects, what it leaves open on purpose
 | Read the audit log, the staging area | Nobody through the API | Never served. |
 
 > [!IMPORTANT]
-> local-registry has no read authentication. Put it on a private network, or behind a proxy that authenticates readers, if your releases are confidential.
+> Local Registry has no read authentication. Put it on a private network, or behind a proxy that authenticates readers, if your releases are confidential.
 
 ## The upload token
 
@@ -39,27 +39,27 @@ There is one upload token per server: a shared secret that every publisher prese
 openssl rand -hex 32
 ```
 
-Store it in your secret manager, then hand it to the server and to the CI pipelines that publish:
+Store it in a secret manager, then hand it to the server and to whatever publishes (machines, CI pipelines):
 
 - systemd: in the configuration file, owned by the service user, mode `0600`;
 - Docker: `-e LOCAL_REGISTRY_UPLOAD_TOKEN` from the environment of the shell or of your orchestrator;
 - Kubernetes: a `Secret`, read through `secretKeyRef` (see [Install](install.md));
 - CI: a masked, protected secret variable.
 
-Clients should send the token on standard input, never as a command-line argument. The [upload scripts](../reference/scripts.md) already do this:
+Clients must never pass the token as a command-line argument. [`localrectl`](../reference/localrectl.md) reads it from `LOCAL_REGISTRY_UPLOAD_TOKEN` and never prints it. With curl, send it on standard input:
 
 ```sh
 printf 'Authorization: Bearer %s\n' "$LOCAL_REGISTRY_UPLOAD_TOKEN" |
-  curl -fsS -H @- -X POST "https://registry.example.com/my-product/artifacts/v1.2.0/publish"
+  curl -fsS -H @- -X POST "https://registry.corp.example/my-product/artifacts/v1.2.0/publish"
 ```
 
 ### Rotate the token
 
 The server reads the token at startup.
 
-1. Generate a new token and store it in your secret manager.
+1. Generate a new token and store it in a secret manager.
 2. Update the server's configuration or secret, then restart it. Uploads in staging survive the restart.
-3. Update the CI secrets. Publishers still using the old token get `401`.
+3. Update the token wherever you publish from, such as CI secrets. Publishers still using the old token get `401`.
 
 The new `token_id` appears in the logs from the restart on, so you can tell versions published before and after the rotation apart.
 
@@ -96,7 +96,7 @@ Terminate TLS in your load balancer, Ingress controller or proxy, and keep the r
 | Read and send timeouts on `/…/artifacts/…/files/…` and `/…/publish` | Up to 30 minutes, the server's own upload limit. |
 | Request buffering | Off for uploads if your proxy supports it, so large files stream through. |
 
-Then set `public-url` to the address clients use (`https://registry.example.com`), so the download URLs the registry writes point to the proxy.
+Then set `public-url` to the address clients use (`https://registry.corp.example`), so the download URLs the registry writes point to the proxy.
 
 The server logs the `X-Forwarded-For` header it receives, as `forwarded_for`, but does not trust it: the `remote` field is always the TCP peer, here your proxy.
 

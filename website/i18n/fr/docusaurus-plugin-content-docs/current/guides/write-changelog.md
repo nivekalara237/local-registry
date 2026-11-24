@@ -1,28 +1,33 @@
 ---
 title: Écrire les notes de version
 sidebar_label: Écrire les notes de version
-description: Donner à chaque version ses notes, à partir du changelog de goreleaser ou d'un fichier Keep a Changelog.
+description: Donner à chaque version ses notes, à partir du changelog de GoReleaser ou d'un fichier Keep a Changelog.
 ---
 
-Les notes d'une version viennent d'un `CHANGELOG.md` envoyé avec elle. Le registre transforme ce fichier en liste `changes` dans `release.json`, et signale les versions qui contiennent des correctifs de sécurité. Ce guide couvre les deux formats lus : le changelog de goreleaser, et un fichier [Keep a Changelog](https://keepachangelog.com) écrit à la main.
+Les notes de version sont fournies dans un fichier `CHANGELOG.md` transmis avec chaque publication. Le registre analyse ce fichier et convertit son contenu en une liste `changes` dans `release.json`. Il détecte également les versions contenant des correctifs de sécurité.
 
-Les notes sont optionnelles. Sans `CHANGELOG.md`, `changes` est une liste vide.
+Ce guide présente les deux formats pris en charge : le changelog généré par GoReleaser et le format [Keep a Changelog](https://keepachangelog.com), qui permet de rédiger les notes manuellement.
 
-## Quel format choisir
+Les notes de version sont facultatives. En l'absence de fichier `CHANGELOG.md`, le champ `changes` reste une liste vide.
 
-| Vous construisez avec | Utilisez | Écrit par |
+## Quel format choisir ?
+
+| Votre méthode de publication | Format à utiliser | Rédigé par |
 | --- | --- | --- |
-| goreleaser, avec des [Conventional Commits](https://www.conventionalcommits.org/) | le `dist/CHANGELOG.md` de goreleaser | goreleaser, à partir de vos messages de commit |
-| autre chose, ou des notes rédigées | Keep a Changelog | votre équipe, à la main |
+| Vous utilisez GoReleaser avec des [Conventional Commits](https://www.conventionalcommits.org/) | Le fichier `dist/CHANGELOG.md` généré par GoReleaser | GoReleaser, à partir des messages de commit |
+| Vous utilisez un autre outil de build ou souhaitez rédiger vos propres notes | Keep a Changelog | Votre équipe, manuellement |
 
-Les deux formats peuvent cohabiter dans un même fichier.
+Les deux formats peuvent également cohabiter dans un même fichier.
 
-## Avec goreleaser
+## Avec GoReleaser
 
-goreleaser écrit `dist/CHANGELOG.md` à chaque release. `upload.sh` l'envoie automatiquement quand il se trouve à côté d'`artifacts.json`.
+GoReleaser génère un fichier `dist/CHANGELOG.md` lors de chaque release. Transmettez-le au registre avec l'option `--changelog-file dist/CHANGELOG.md` de `localrectl publish`.
 
-1. **Écrivez des messages Conventional Commits**, comme `feat(api): CSV export` ou `fix(security): bump golang.org/x/net`.
-2. **Laissez goreleaser garder les préfixes.** Dans `.goreleaser.yaml`, lisez le changelog depuis git ou GitHub, et ne filtrez pas les commits `feat:` et `fix:` :
+Pour obtenir des notes correctement interprétées :
+
+1. **Utilisez des messages Conventional Commits.** Par exemple : `feat(api): CSV export` ou `fix(security): bump golang.org/x/net`.
+
+2. **Conservez les préfixes des messages.** Dans votre configuration `.goreleaser.yaml`, configurez la génération du changelog pour récupérer les messages depuis Git ou GitHub, sans supprimer les préfixes `feat:` et `fix:` :
 
    ```yaml
    changelog:
@@ -35,24 +40,35 @@ goreleaser écrit `dist/CHANGELOG.md` à chaque release. `upload.sh` l'envoie au
          - "^chore:"
    ```
 
-3. **Faites la release comme d'habitude.** Chaque commit devient une note :
+3. **Générez votre release avec GoReleaser.** Les messages de commit retenus deviennent des notes de version :
 
-   | Message de commit | Note |
+   | Message de commit | Note générée |
    | --- | --- |
    | `feat(api): CSV export` | `added` : CSV export |
    | `fix: projects beyond 500` | `fixed` : projects beyond 500 |
    | `fix(security): bump golang.org/x/net` | `security` : bump golang.org/x/net |
    | `perf: faster hashing` | `changed` : faster hashing |
-   | `docs: typo` | pas une note |
+   | `docs: typo` | Aucune note |
 
-La correspondance complète est dans la [référence de CHANGELOG.md](../reference/changelog-format.md).
+La correspondance complète entre les préfixes et les types de notes est décrite dans la [référence de CHANGELOG.md](../reference/changelog-format.md).
 
 > [!WARNING]
-> Si une règle `filters` ou un titre de `groups` de goreleaser réécrit les messages sans leur préfixe `feat:` / `fix:`, le registre ne trouve rien à lire, et `changes` reste vide.
+> Si les règles `filters` ou les titres de groupes (`groups`) de GoReleaser suppriment les préfixes `feat:` et `fix:` des messages, le registre ne pourra plus identifier leur catégorie. Le champ `changes` risque alors de rester vide.
 
-## À la main, avec Keep a Changelog
+## Manuellement, avec Keep a Changelog
 
-Tenez un seul `CHANGELOG.md` pour tout le produit, la version la plus récente en premier. Sous chaque version, listez les changements sous les titres standard : `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`.
+Vous pouvez rédiger vous-même un fichier `CHANGELOG.md` en utilisant le format Keep a Changelog.
+
+Pour un produit dont les versions sont publiées successivement, regroupez les notes dans un même fichier, en plaçant la version la plus récente en premier. Utilisez les titres standard suivants pour classer les changements :
+
+- `Added` : nouvelles fonctionnalités.
+- `Changed` : modifications apportées aux fonctionnalités existantes.
+- `Deprecated` : fonctionnalités dont l'utilisation est déconseillée.
+- `Removed` : fonctionnalités supprimées.
+- `Fixed` : corrections de bugs.
+- `Security` : correctifs de sécurité.
+
+Exemple :
 
 ```markdown
 # Changelog
@@ -72,23 +88,43 @@ Tenez un seul `CHANGELOG.md` pour tout le produit, la version la plus récente e
 - users and products tables
 ```
 
-Quand le fichier a des titres de version, le registre lit **seulement la section de la version publiée**. Publier `v1.1.0` donne deux notes : « orders table » (`added`) et « remove the default password » (`security`). Le titre peut s'écrire avec ou sans `v` et crochets : `## [1.1.0]`, `## 1.1.0` et `## v1.1.0` correspondent tous à `v1.1.0`. La section `Unreleased` n'est jamais publiée.
+Lorsque le fichier contient plusieurs sections de version, le registre extrait **uniquement celle correspondant à la version publiée**.
+
+Par exemple, la publication de `v1.1.0` produit deux notes :
+
+- `added` : orders table
+- `security` : remove the default password
+
+Le titre de version peut être écrit avec ou sans préfixe `v` et crochets. Les trois formes suivantes sont reconnues comme correspondant à `v1.1.0` :
+
+- `## [1.1.0]`
+- `## 1.1.0`
+- `## v1.1.0`
+
+La section `Unreleased` n'est jamais publiée.
 
 > [!IMPORTANT]
-> Ajoutez la section **avant** de publier. Une version sans section dans le fichier n'a pas de notes, et une version publiée ne peut plus être modifiée.
+> Ajoutez la section correspondant à la version **avant de lancer la publication**. Si cette section est absente, la version sera publiée sans notes. Une fois publiée, une version ne peut plus être modifiée.
 
-Un fichier sans aucun titre de version est lu en entier : utilisez cette forme si vous écrivez un petit `CHANGELOG.md` par release.
+Si votre fichier ne contient aucun titre de version, le registre analyse son contenu dans son intégralité. Cette possibilité convient notamment aux petits fichiers `CHANGELOG.md` rédigés individuellement pour chaque publication.
 
-Envoyez le fichier avec la release :
+## Transmettre les notes de version
 
-- dans un dossier publié avec `upload.sh`, placez `CHANGELOG.md` dans le dossier ;
-- avec goreleaser, c'est `dist/CHANGELOG.md`, écrit par goreleaser.
+Le fichier `CHANGELOG.md` doit être fourni avec les artefacts de la version :
+
+- **Avec un dossier de fichiers :** placez `CHANGELOG.md` dans le dossier publié avec `localrectl publish --root`.
+- **Avec GoReleaser :** passez le fichier `dist/CHANGELOG.md` généré par GoReleaser avec `--changelog-file dist/CHANGELOG.md`.
 
 ## Vérifier le résultat
 
+Après la publication, consultez les informations de la version pour vérifier que les notes ont été correctement interprétées :
+
 ```sh
-curl -fsS https://registry.example.com/sonarbridge/releases/v1.1.0 | jq '{securityUpdates, changes}'
+curl -fsS https://registry.corp.example/bridge/releases/v1.1.0 \
+  | jq '{securityUpdates, changes}'
 ```
+
+Exemple de réponse :
 
 ```json
 {
@@ -100,9 +136,12 @@ curl -fsS https://registry.example.com/sonarbridge/releases/v1.1.0 | jq '{securi
 }
 ```
 
-`securityUpdates` vaut `true` quand au moins une note est de type `security`. L'indicateur apparaît aussi pour chaque version dans l'`index.json` du produit : les utilisateurs repèrent ainsi les versions à ne pas sauter.
+Le champ `securityUpdates` vaut `true` lorsqu'au moins une note est de type `security`. Cet indicateur est également présent pour chaque version dans le fichier `index.json` du produit. Il permet ainsi aux utilisateurs d'identifier rapidement les versions contenant des correctifs de sécurité.
 
 ## Limites
 
-- 1 Mio au plus, texte UTF-8. Les fins de ligne Windows sont acceptées.
-- Le serveur vérifie la taille et l'encodage à l'upload (`422` sinon), et lit les notes à la publication.
+- Taille maximale : 1 Mio.
+- Encodage accepté : UTF-8.
+- Les fins de ligne Windows sont prises en charge.
+- Le serveur vérifie la taille et l'encodage du fichier lors de son envoi. En cas d'erreur, il renvoie une réponse `422`.
+- L'analyse et l'extraction des notes de version sont effectuées au moment de la publication.

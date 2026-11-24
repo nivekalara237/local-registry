@@ -1,10 +1,10 @@
 ---
 title: Garanties et limites
 sidebar_label: Limites
-description: Ce que local-registry garantit, comment, et les limites à connaître avant d'en dépendre.
+description: Ce que Local Registry garantit, comment, et les limites à connaître avant d'en dépendre.
 ---
 
-Cette page dit ce que local-registry promet, et où il s'arrête. Servez-vous-en pour décider si le registre convient à un usage, et de ce qu'il faut mettre autour.
+Cette page dit ce que Local Registry promet, et où il s'arrête. Servez-vous-en pour décider si le registre convient à un usage, et de ce qu'il faut mettre autour.
 
 ## Garanties
 
@@ -29,8 +29,8 @@ Ces garanties tiennent à deux conditions :
 ### Contrôle d'accès
 
 - **Les lectures sont publiques.** Tout ce qui est sous `bin.local/assets/` et `assets/` se télécharge sans authentification. Restreignez l'accès au niveau réseau, ou par un proxy qui authentifie, si les releases sont confidentielles.
-- **Un token par serveur.** Tous les publieurs partagent le même token d'upload. Il n'y a ni token par équipe, ni portée, ni permission par produit. Le journal d'audit distingue les publications par adresse et par date, pas par équipe.
-- **Sans TLS, le token circule en clair.** Activez HTTPS dans le serveur ou dans un proxy. Voir [Sécurité](operations/security.md).
+- **Un token par serveur.** Tous les éditeurs partagent le même token d'upload. Il n'y a ni token par utilisateur, ni portée, ni permission par produit. Le journal d'audit distingue les publications par adresse et par date, pas par éditeur.
+- **Sans TLS, le token circule en clair.** Activez HTTPS dans le serveur ou dans un proxy. Consultez [Sécurité](operations/security.md).
 - **`X-Forwarded-For` est enregistré, pas vérifié.**
 
 ### Disponibilité et montée en charge
@@ -38,13 +38,13 @@ Ces garanties tiennent à deux conditions :
 - **Une instance par asset path.** Il n'y a ni cluster ni réplication. La haute disponibilité passe par un redémarrage rapide sur le même volume, et par des sauvegardes.
 - **Pas de cache.** Chaque requête lit le disque. Les routes de produit et d'index parcourent les répertoires de version d'un produit à chaque appel.
 - **Les téléchargements doivent finir en 20 secondes.** Un gros fichier sur une liaison lente est coupé. Les clients peuvent reprendre avec une requête `Range` (`curl -C -`). Placez un proxy de cache devant pour les gros fichiers.
-- **Pas de point de métriques.** Supervisez par `/healthz`, les logs de requêtes et le journal d'audit. Voir [Supervision](operations/monitoring.md).
+- **Pas de point de métriques.** Supervisez par `/healthz`, les logs de requêtes et le journal d'audit. Consultez [Supervision](operations/monitoring.md).
 
 ### Contenu
 
-- **Pas de route de suppression**, ni pour le staging ni pour les versions publiées. Retirer une version est une opération manuelle sur le disque. Voir [Stockage et sauvegarde](operations/storage-and-backup.md).
+- **Pas de route de suppression**, ni pour le staging ni pour les versions publiées. Retirer une version est une opération manuelle sur le disque. Consultez [Stockage et sauvegarde](operations/storage-and-backup.md).
 - **Fichiers à plat uniquement.** Une version contient des fichiers, pas des répertoires : archivez un répertoire avant de le publier.
-- **Sans `artifacts.json`, `os` et `arch` sont inconnus.** Le serveur déduit le type de chaque fichier de son nom seulement. Envoyez un `artifacts.json`, écrit à la main si besoin, quand les consommateurs ont besoin de la plateforme. Voir [Publier des fichiers simples](guides/publish-plain-files.md).
+- **Sans `artifacts.json`, `os` et `arch` sont inconnus.** Le serveur déduit le type de chaque fichier de son nom seulement. Envoyez un `artifacts.json`, écrit à la main si besoin, quand les consommateurs ont besoin de la plateforme. Consultez [Publier des fichiers simples](guides/publish-plain-files.md).
 - **Les versions publiées avant le standard `local-registry/v1`** n'ont pas de `release.json`. Elles ne sont pas listées par `/products` et `/<product>/index`, et ne peuvent pas être la latest.
 - **Le journal d'audit n'est pas signé**, et une écriture ratée ne fait pas échouer la requête.
 - **Les liens symboliques** ne sont contrôlés que sur les routes de téléchargement. Les routes du catalogue et d'upload suivent les liens trouvés sur le disque : gardez les liens hors de l'asset path.
@@ -52,5 +52,5 @@ Ces garanties tiennent à deux conditions :
 
 ### Déprécié
 
-- `POST /releases/{version}` ne lit que le produit `gitlab` et sera retiré. Utilisez `POST /releases/{product}/{version}`. Voir [Routes historiques](reference/api/legacy.md).
-- `/artifacts/all` renvoie le contenu brut de chaque `artifacts.json`, `metadata.json` et fichier de checksums. Il est conservé pour les clients existants ; les nouveaux clients doivent utiliser [les routes de produit](reference/api/products.md).
+- `POST /releases/{version}` ne lit que le produit `gitlab` et est dépréciée. Utilisez `POST /releases/{product}/{version}`. Consultez [Routes historiques](reference/api/legacy.md).
+- `/artifacts/all` renvoie le contenu brut de chaque `artifacts.json`, `metadata.json` et fichier de checksums. C'est une vue bas niveau, destinée aux clients qui lisent ces fichiers directement ; les autres clients doivent utiliser [les routes de produit](reference/api/products.md).

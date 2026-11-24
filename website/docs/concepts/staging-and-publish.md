@@ -13,23 +13,7 @@ Staging removes that risk. Nothing is public until the server has seen and check
 
 ## The flow
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant P as Publisher (upload.sh)
-    participant S as Server
-    participant St as Staging (private)
-    participant Pub as Published tree (public)
-    P->>S: PUT /{product}/artifacts/{version}/files/{name}
-    S->>St: stream to a temp file, check sha256, move in
-    Note over P,St: repeated for each file, registry.yaml included
-    P->>S: POST /{product}/artifacts/{version}/publish
-    S->>St: check the whole version
-    S->>St: write release.json (and checksums.txt if missing)
-    S->>Pub: rename the staging directory (atomic)
-    S->>Pub: update latest (if asked) and index.json
-    S-->>P: 200 {product, version, files, latest}
-```
+![Upload to staging, then publish: the requests between the client, the server, staging and the published tree](/img/lorecalre-flow.svg)
 
 ### Upload
 
@@ -39,7 +23,7 @@ Each `PUT` sends one file, with the upload token.
 - If you send `X-Checksum-Sha256`, the server compares it with what it received and refuses a mismatch.
 - Uploading the same name again replaces the staged file. This is how you fix a mistake before publishing.
 - `registry.yaml` and `CHANGELOG.md` are validated on arrival, so a malformed card is refused right away.
-- With goreleaser, `artifacts.json` comes **last**: it is refused while a file it lists is missing.
+- With GoReleaser, `artifacts.json` comes **last**: it is refused while a file it lists is missing.
 
 ### Publish
 
@@ -68,7 +52,7 @@ Two consequences for operators:
 
 ## When a publication is refused
 
-Nothing is published and **staging is kept**. The answer says what is wrong, for example `422 registry.yaml not uploaded: every version needs its product card`. Upload the missing or corrected file under the same name and publish again; or simply rerun `upload.sh`.
+Nothing is published and **staging is kept**. The answer says what is wrong, for example `422 registry.yaml not uploaded: every version needs its product card`. Upload the missing or corrected file under the same name and publish again; or simply run `localrectl publish` again.
 
 Staged versions you abandon are not kept forever. With `--staging-ttl` (24 h by default), the server purges staged versions untouched for that long. See [Quotas and staging](../operations/quotas-and-staging.md).
 

@@ -1,68 +1,59 @@
 ---
 title: Publier depuis Windows
 sidebar_label: Windows
-description: Lancer upload.sh sous Windows avec Git Bash, en évitant les pièges des fins de ligne et des chemins.
+description: Publier depuis Windows avec le binaire natif de localrectl, en évitant les pièges des chemins et des certificats.
 ---
 
-`upload.sh` est un script bash. Sous Windows, lancez-le depuis **Git Bash** (installé avec Git for Windows), MSYS2 ou WSL. Cette page liste les outils à installer et les pièges propres à Windows. Les étapes elles-mêmes sont celles de [Publier avec goreleaser](publish-with-goreleaser.md) et de [Publier des fichiers](publish-plain-files.md).
+[`localrectl`](../reference/localrectl.md) existe en binaire Windows natif : ni bash, ni curl, ni jq ne sont nécessaires pour publier. Cette page couvre ce qui est propre à Windows. Les étapes elles-mêmes sont celles de [Publier avec GoReleaser](publish-with-goreleaser.md) et de [Publier des fichiers](publish-plain-files.md).
 
-## Installer les outils
+## Installer localrectl
 
-| Outil | D'où il vient |
-| --- | --- |
-| `bash`, `sha256sum`, `tar` | Git for Windows (Git Bash) |
-| `curl` | Windows 10 et suivants, et Git for Windows |
-| `jq` | Non fourni : installez `jq.exe` depuis [jqlang.org](https://jqlang.org/download/), ou avec un gestionnaire de paquets comme `winget` ou `scoop`, et vérifiez qu'il est dans le `PATH` de Git Bash |
+Téléchargez le binaire Windows sur la [page des releases de localrectl](https://github.com/nivekalara237/localrectl/releases), vérifiez-le avec le fichier de checksums publié avec lui, puis placez-le dans un dossier de votre `PATH`.
 
-Vérifiez-les dans Git Bash :
+Vérifiez qu'il joint le registre :
 
-```sh
-bash --version && curl --version && jq --version && sha256sum --version
+```powershell
+$env:LOCAL_REGISTRY_URL = "https://registry.corp.example"
+localrectl ping
 ```
+
+`localrectl completion powershell` affiche le script de complétion pour PowerShell.
 
 ## Publier
 
-```sh
-export LOCAL_REGISTRY_URL=https://registry.example.com
-export LOCAL_REGISTRY_UPLOAD_TOKEN=…   # depuis votre coffre de secrets
-./ci/upload.sh --latest --root . sonarbridge dist/artifacts.json
+```powershell
+$env:LOCAL_REGISTRY_URL = "https://registry.corp.example"
+$env:LOCAL_REGISTRY_UPLOAD_TOKEN = "…"   # depuis votre coffre de secrets, jamais en ligne de commande
+
+localrectl publish bridge --goreleaser-dir dist --product-file registry.yaml --changelog-file dist/CHANGELOG.md --latest
 ```
 
-Lancez-le depuis Git Bash, pas depuis PowerShell ni `cmd.exe`. Dans WSL, tout se passe comme sous Linux : installez-y le `jq` Linux.
+`localrectl` lit le token dans `LOCAL_REGISTRY_UPLOAD_TOKEN` et ne l'affiche jamais. Ajoutez `--dry-run` pour voir ce qui serait envoyé, sans rien envoyer.
+
+## Télécharger
+
+Sans sélection, `localrectl download` prend l'archive de la machine : le zip sous Windows.
+
+```powershell
+localrectl download bridge --extract -d C:\tools\bridge
+```
 
 ## Pièges
 
-### `jq.exe` et les fins de ligne
+### Fins de ligne
 
-Le `jq.exe` natif termine ses lignes par CRLF. Un retour chariot égaré dans un nom ou un checksum casse l'URL, et le serveur répond `400 Bad Request`. `upload.sh` retire lui-même ces retours chariot. Si vous voyez des lignes `)UT …` ou un `400` avec une ancienne copie du script, mettez-la à jour depuis une release récente de local-registry.
+`registry.yaml`, `CHANGELOG.md` et les fichiers de checksums peuvent utiliser CRLF : le serveur accepte les deux fins de ligne.
 
-> [!WARNING]
-> `publish-to-local-registry.sh` ne gère pas la sortie de `jq.exe`, et vise les systèmes POSIX. Utilisez `upload.sh` sous Windows.
+### Noms de fichiers
 
-### Scripts récupérés en CRLF
+Les noms de fichiers publiés sur le registre ne peuvent utiliser que `A-Z a-z 0-9 . _ -`. Renommez les fichiers qui contiennent des espaces ou des accents avant de publier.
 
-Si Git convertit les fins de ligne (`core.autocrlf=true`), un script récupéré en CRLF échoue avec `$'\r': command not found`. Gardez les scripts shell en LF avec un fichier `.gitattributes` à la racine de votre dépôt :
+### Certificats privés
 
-```
-*.sh text eol=lf
-```
+Si le registre utilise un certificat émis par une autorité de certification privée, indiquez le certificat de cette autorité à `localrectl` :
 
-Puis récupérez à nouveau les fichiers : `git rm --cached -r . && git reset --hard`. Commitez ou mettez de côté vos modifications avant de lancer cette commande.
-
-`registry.yaml`, `CHANGELOG.md` et les fichiers de checksums peuvent être en CRLF : le serveur accepte les deux fins de ligne.
-
-### Chemins
-
-- Utilisez des barres obliques et des chemins relatifs : `dist/artifacts.json`, `--root .`.
-- Passez `--root .` quand vous lancez le script depuis le dossier où goreleaser a tourné. Le script lit alors chaque `path` d'`artifacts.json` à partir de là.
-- Les noms de fichiers publiés ne peuvent utiliser que `A-Z a-z 0-9 . _ -`. Renommez les fichiers qui contiennent des espaces ou des accents avant de publier.
-
-### Certificats auto-signés
-
-Si le registre utilise un certificat de l'autorité de certification de votre entreprise, indiquez-la à curl :
-
-```sh
-export CURL_CA_BUNDLE=/c/certs/corp-ca.pem
+```powershell
+$env:LOCAL_REGISTRY_CA_FILE = "C:\certs\corp-ca.pem"
 ```
 
-Plus de solutions dans [Dépannage](../troubleshooting.md).
+D'autres solutions dans [Dépannage](../troubleshooting.md).
