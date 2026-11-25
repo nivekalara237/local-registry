@@ -36,3 +36,40 @@ jobs:
       - run: npm run typecheck
       # Broken links, anchors and Markdown links fail the build (docusaurus.config.ts).
       - run: npm run build
+        env:
+          DOCS_BASE_URL: "/"
+          DOCS_URL: "https://local-registry.nivekaa.com"
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          path: build/
+          name: build-data
+          retention-days: 1
+
+  deploy-aws:
+    name: Deploy website to S3
+    needs: build
+    runs-on: ubuntu-22.04
+    environment: aws
+    defaults:
+      run:
+        working-directory: website
+
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v7.0.0
+        with:
+          path: build/
+          name: build-data
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          audience: 'sts.amazonaws.com'
+          output-env-credentials: 'true'
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Deploy to S3
+        run: aws s3 sync build-data/ s3://${{ env.AWS_S3_BUCKET }} --delete --cache-control "public, max-age=60, immutable"
+        env:
+          AWS_S3_BUCKET: "local-registry.nivekaa.com"
