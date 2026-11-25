@@ -4,7 +4,7 @@ description: Comment le serveur transforme un CHANGELOG.md déposé en notes de 
 sidebar_label: CHANGELOG.md
 ---
 
-`CHANGELOG.md` est la source facultative des notes d'une version : les `changes` de son [`release.json`](./release-json.md). C'est soit le fichier qu'écrit goreleaser (`dist/CHANGELOG.md`), soit un fichier que l'équipe écrit au format [Keep a Changelog](https://keepachangelog.com). Les deux formes sont lues, et peuvent se mélanger dans un même fichier. Pour des conseils de rédaction, voir [Écrire un changelog](../guides/write-changelog.md).
+`CHANGELOG.md` est la source facultative des notes d'une version : les `changes` de son [`release.json`](./release-json.md). C'est soit le fichier qu'écrit GoReleaser (`dist/CHANGELOG.md`), soit un fichier que l'équipe écrit au format [Keep a Changelog](https://keepachangelog.com). Les deux formes sont lues, et peuvent se mélanger dans un même fichier. Pour des conseils de rédaction, voir [Écrire un changelog](../guides/write-changelog.md).
 
 ## Règles de dépôt
 
@@ -27,7 +27,7 @@ Chaque élément de liste (`- …` ou `* …`) placé sous l'un de ces titres de
 | `### Fixed` | `fixed` |
 | `### Security` | `security` |
 
-Un élément de liste placé sous un autre titre relève de la règle goreleaser ci-dessous.
+Un élément de liste placé sous un autre titre relève de la règle GoReleaser ci-dessous.
 
 **Sections de version.** Quand le fichier a des titres de version de niveau 2, seule la section de la version publiée est lue :
 
@@ -65,9 +65,9 @@ Publié en `v1.0.0`, ce fichier donne :
 ]
 ```
 
-## goreleaser
+## GoReleaser
 
-Chaque autre élément de liste dont le message est un [Conventional Commit](https://www.conventionalcommits.org/) (`type(scope)!: description`) devient une note. Avant la lecture, les décorations de goreleaser sont retirées : le sha du commit en tête (`9c9d766 ` ou `9c9d766: `), et un auteur en fin de ligne comme ` (@user)`, ` (Name <mail>)` ou ` by @user in <url>`.
+Chaque autre élément de liste dont le message est un [Conventional Commit](https://www.conventionalcommits.org/) (`type(scope)!: description`) devient une note. Avant la lecture, les décorations de GoReleaser sont retirées : le sha du commit en tête (`9c9d766 ` ou `9c9d766: `), et un auteur en fin de ligne comme ` (@user)`, ` (Name <mail>)` ou ` by @user in <url>`.
 
 | Type de commit | `kind` |
 | --- | --- |
@@ -94,4 +94,4 @@ Tout le reste est ignoré : les titres, les lignes `**Full Changelog**` et les m
 donne `added` « CSV export », `fixed` « projects beyond 500 » et `security` « bump golang.org/x/net ».
 
 > [!TIP]
-> Dans `.goreleaser.yaml`, utilisez `changelog.use: git` ou `github`, et gardez les préfixes `feat:`, `fix:`… dans les messages : quand les `filters` de goreleaser les retirent, il ne reste rien à lire.
+> Dans `.goreleaser.yaml`, utilisez `changelog.use: git` ou `github`, et gardez les préfixes `feat:`, `fix:`… dans les messages : quand les `filters` de GoReleaser les retirent, il ne reste rien à lire.

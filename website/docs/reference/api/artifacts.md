@@ -1,13 +1,13 @@
 ---
 title: Artifacts API
-description: Read the goreleaser files of a release (artifacts.json, metadata.json), the raw catalogue, and the liveness probe.
+description: Read the GoReleaser files of a release (artifacts.json, metadata.json), the raw catalogue, and the liveness probe.
 sidebar_label: Artifacts
 ---
 
-These routes serve the goreleaser files of a release as they are stored: `artifacts.json` and `metadata.json`. They exist for clients built on goreleaser's formats. New clients should read [`release.json`](./products.md), which every version has, goreleaser or not. All routes here are read-only and need no token.
+These routes serve the GoReleaser files of a release as they are stored: `artifacts.json` and `metadata.json`. They exist for clients built on GoReleaser's formats. New clients should read [`release.json`](./products.md), which every version has, GoReleaser or not. All routes here are read-only and need no token.
 
 > [!NOTE]
-> `artifacts.json` and `metadata.json` are optional since goreleaser is optional. A version published without them answers `404` on the routes that serve them.
+> `artifacts.json` and `metadata.json` are optional since GoReleaser is optional. A version published without them answers `404` on the routes that serve them.
 
 ## Get the latest artifacts.json
 
@@ -20,14 +20,14 @@ Returns `bin.local/assets/binaries/<product>/artifacts.json`: the copy of the la
 | `product` | path | Product name. |
 
 ```sh
-curl -s https://registry.example.com/sonarbridge/artifacts
+curl -s https://registry.corp.example/bridge/artifacts
 ```
 
 ```json
 [
-  {"internal_type": 36, "name": "metadata.json", "path": "https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/metadata.json", "type": "Metadata"},
-  {"extra": {"Checksum": "sha256:3f1c…", "Format": "tar.gz", "ID": "sonarbridge"}, "goarch": "amd64", "goos": "linux", "internal_type": 1,
-   "name": "sonarbridge_1.4.2_linux_amd64.tar.gz", "path": "https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz", "type": "Archive"}
+  {"internal_type": 36, "name": "metadata.json", "path": "https://registry.corp.example/bridge/artifacts/v1.4.2/files/metadata.json", "type": "Metadata"},
+  {"extra": {"Checksum": "sha256:3f1c…", "Format": "tar.gz", "ID": "bridge"}, "goarch": "amd64", "goos": "linux", "internal_type": 1,
+   "name": "bridge_1.4.2_linux_amd64.tar.gz", "path": "https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_linux_amd64.tar.gz", "type": "Archive"}
 ]
 ```
 
@@ -50,7 +50,7 @@ Returns `bin.local/assets/binaries/<product>/<version>/artifacts.json`. With `la
 | `version` | path | Exact version, or `latest`. |
 
 ```sh
-curl -s https://registry.example.com/sonarbridge/artifacts/v1.4.2
+curl -s https://registry.corp.example/bridge/artifacts/v1.4.2
 ```
 
 | Status | Cause |
@@ -62,7 +62,7 @@ curl -s https://registry.example.com/sonarbridge/artifacts/v1.4.2
 
 `GET /artifacts/metadatas/{product}`
 
-Returns the `metadata.json` that goreleaser wrote for a published version.
+Returns the `metadata.json` that GoReleaser wrote for a published version.
 
 | Parameter | In | Description |
 | --- | --- | --- |
@@ -70,12 +70,12 @@ Returns the `metadata.json` that goreleaser wrote for a published version.
 | `version` | query, optional | Exact version. Absent, empty or `latest`: the latest version. |
 
 ```sh
-curl -s https://registry.example.com/artifacts/metadatas/sonarbridge
-curl -s "https://registry.example.com/artifacts/metadatas/sonarbridge?version=v1.4.2"
+curl -s https://registry.corp.example/artifacts/metadatas/bridge
+curl -s "https://registry.corp.example/artifacts/metadatas/bridge?version=v1.4.2"
 ```
 
 ```json
-{"project_name": "sonarbridge", "tag": "v1.4.2", "previous_tag": "v1.4.1", "version": "1.4.2", "commit": "9c9d7664ceef…", "date": "2026-10-10T20:01:27+02:00", "runtime": {"goos": "linux", "goarch": "amd64"}}
+{"project_name": "bridge", "tag": "v1.4.2", "previous_tag": "v1.4.1", "version": "1.4.2", "commit": "9c9d7664ceef…", "date": "2026-10-10T20:01:27+02:00", "runtime": {"goos": "linux", "goarch": "amd64"}}
 ```
 
 | Status | Cause |
@@ -87,16 +87,16 @@ curl -s "https://registry.example.com/artifacts/metadatas/sonarbridge?version=v1
 
 `GET /artifacts/all`
 
-Scans `bin.local/assets/` and returns, for each directory holding at least one known file, the raw content of those files as strings. It is a low-level view, kept for existing clients.
+Scans `bin.local/assets/` and returns, for each directory holding at least one known file, the raw content of those files as strings. It is a low-level view, for clients that read these raw files.
 
 ```sh
-curl -s https://registry.example.com/artifacts/all
+curl -s https://registry.corp.example/artifacts/all
 ```
 
 ```json
 [
-  {"provider": "sonarbridge", "artifacts_json": "[…]", "metadata_json": "", "checksums_text": ""},
-  {"provider": "v1.4.2", "artifacts_json": "[…]", "metadata_json": "{\"tag\":\"v1.4.2\",…}", "checksums_text": "3f1c…  sonarbridge_1.4.2_linux_amd64.tar.gz\n…"}
+  {"provider": "bridge", "artifacts_json": "[…]", "metadata_json": "", "checksums_text": ""},
+  {"provider": "v1.4.2", "artifacts_json": "[…]", "metadata_json": "{\"tag\":\"v1.4.2\",…}", "checksums_text": "3f1c…  bridge_1.4.2_linux_amd64.tar.gz\n…"}
 ]
 ```
 

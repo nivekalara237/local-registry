@@ -1,10 +1,10 @@
 ---
 title: Guarantees and limitations
 sidebar_label: Limitations
-description: What local-registry guarantees, how, and the limits you should know before you depend on it.
+description: What Local Registry guarantees, how, and the limits you should know before you depend on it.
 ---
 
-This page states what local-registry promises, and where it stops. Use it to decide whether the registry fits a use case, and what to put around it.
+This page states what Local Registry promises, and where it stops. Use it to decide whether the registry fits a use case, and what to put around it.
 
 ## Guarantees
 
@@ -29,7 +29,7 @@ These guarantees hold under two conditions:
 ### Access control
 
 - **Reads are public.** Everything under `bin.local/assets/` and `assets/` can be downloaded without authentication. Restrict access at the network level, or with an authenticating proxy, if releases are confidential.
-- **One token per server.** Every publisher shares the same upload token. There are no per-team tokens, scopes or per-product permissions. The audit log tells publications apart by address and time, not by team.
+- **One token per server.** Every publisher shares the same upload token. There are no per-user tokens, scopes or per-product permissions. The audit log tells publications apart by address and time, not by publisher.
 - **Without TLS, the token travels in clear text.** Run HTTPS in the server or in a proxy. See [Security](operations/security.md).
 - **`X-Forwarded-For` is recorded, not verified.**
 
@@ -52,5 +52,5 @@ These guarantees hold under two conditions:
 
 ### Deprecated
 
-- `POST /releases/{version}` reads the `gitlab` product only and will be removed. Use `POST /releases/{product}/{version}`. See [Legacy routes](reference/api/legacy.md).
-- `/artifacts/all` returns the raw content of every `artifacts.json`, `metadata.json` and checksums file. It is kept for existing clients; new clients should use [the product routes](reference/api/products.md).
+- `POST /releases/{version}` reads the `gitlab` product only and is deprecated. Use `POST /releases/{product}/{version}`. See [Legacy routes](reference/api/legacy.md).
+- `/artifacts/all` returns the raw content of every `artifacts.json`, `metadata.json` and checksums file. It is a low-level view, for clients that read these files directly; other clients should use [the product routes](reference/api/products.md).

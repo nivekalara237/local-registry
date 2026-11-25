@@ -21,8 +21,8 @@ Downloads one file of a **published** version. Staged files are never served.
 | `If-Modified-Since` | header, optional | Conditional download. |
 
 ```sh
-curl -fsSO https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz
-curl -fsS -C - -O https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_windows_amd64.zip   # resume
+curl -fsSO https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_linux_amd64.tar.gz
+curl -fsS -C - -O https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_windows_amd64.zip   # resume
 ```
 
 Response headers:
@@ -54,7 +54,7 @@ Downloads a public file by its path relative to the server's `--asset-path`, enc
 | `filePath` | path | Path relative to the asset path, `/` encoded as `%2F`. |
 
 ```sh
-curl -fsS -OJ "https://registry.example.com/assets/binary/bin.local%2Fassets%2Fbinaries%2Fsonarbridge%2Fv1.4.2%2Fsonarbridge_1.4.2_checksums.txt"
+curl -fsS -OJ "https://registry.corp.example/assets/binary/bin.local%2Fassets%2Fbinaries%2Fbridge%2Fv1.4.2%2Fbridge_1.4.2_checksums.txt"
 ```
 
 Encode the path with your language's path escaping: `encodeURIComponent` in JavaScript, `url.PathEscape` in Go, `urllib.parse.quote(p, safe="")` in Python.

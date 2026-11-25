@@ -11,15 +11,15 @@ sidebar_label: index.json
 ```json
 {
   "apiVersion": "local-registry/v1",
-  "product": "sonarbridge",
-  "displayName": "SonarBridge",
-  "description": "Bridge between SonarQube and internal tools.",
+  "product": "bridge",
+  "displayName": "Bridge",
+  "description": "Sonar Bridge: bridge between SonarQube and internal tools.",
   "license": "Proprietary",
   "owners": [{ "name": "Platform team", "email": "platform@corp.example" }],
-  "links": [{ "name": "source", "url": "https://git.corp.example/platform/sonarbridge" }],
+  "links": [{ "name": "source", "url": "https://git.corp.example/platform/sonar-bridge" }],
   "keywords": ["sonar", "cli"],
   "labels": { "domain": "quality" },
-  "install": "curl -fsSL https://registry.example.com/… | tar xz\n",
+  "install": "curl -fsSL https://registry.corp.example/… | tar xz\n",
   "latest": "v1.4.2",
   "updatedAt": "2026-10-12T08:00:00Z",
   "versions": [
@@ -63,5 +63,5 @@ Chaque entrée de `versions`, copiée du [`release.json`](./release-json.md) de 
 
 - **Quelles versions.** Seulement celles qui ont un `release.json`. Les versions publiées avant le standard ne sont pas converties : elles restent téléchargeables par les autres routes.
 - **Ordre.** Les versions semver d'abord, de la plus récente à la plus ancienne selon la précédence semver (`v1.10.0` avant `v1.2.0`, `v1.0.0` avant `v1.0.0-rc.1`). Les autres noms suivent, du `publishedAt` le plus récent au plus ancien.
-- **`latest`.** La `version` désignée par `<product>/release.json`, la copie qu'écrit `publish?latest=true`, à condition que cette version ait un `release.json` ; `null` sinon. Voir [Dernière version](../concepts/latest.md).
+- **`latest`.** La `version` désignée par `<product>/release.json`, la copie qu'écrit `publish?latest=true`, à condition que cette version ait un `release.json` ; `null` sinon. Consultez [Dernière version](../concepts/latest.md).
 - **Fraîcheur.** Le fichier sur disque est réécrit de façon atomique après chaque publication du produit. `GET /{product}/index`, `GET /products` et `GET /products/search` le lisent tant qu'il liste exactement les versions qui ont un `release.json` et la dernière version actuelle. Sinon, ils reconstruisent l'index depuis le disque, sans réécrire le fichier : une version retirée ou un `latest` changé à la main apparaît immédiatement.

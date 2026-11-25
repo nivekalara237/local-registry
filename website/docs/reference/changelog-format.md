@@ -4,7 +4,7 @@ description: How the server turns an uploaded CHANGELOG.md into the release note
 sidebar_label: CHANGELOG.md
 ---
 
-`CHANGELOG.md` is the optional source of a version's release notes: the `changes` of its [`release.json`](./release-json.md). It is either the file goreleaser writes (`dist/CHANGELOG.md`) or one the team writes in the [Keep a Changelog](https://keepachangelog.com) format. Both forms are read, and may mix in one file. For advice on writing one, see [Write a changelog](../guides/write-changelog.md).
+`CHANGELOG.md` is the optional source of a version's release notes: the `changes` of its [`release.json`](./release-json.md). It is either the file GoReleaser writes (`dist/CHANGELOG.md`) or one the team writes in the [Keep a Changelog](https://keepachangelog.com) format. Both forms are read, and may mix in one file. For advice on writing one, see [Write a changelog](../guides/write-changelog.md).
 
 ## Upload rules
 
@@ -27,7 +27,7 @@ Each list item (`- …` or `* …`) under one of these level-3 headings (any cas
 | `### Fixed` | `fixed` |
 | `### Security` | `security` |
 
-A list item under any other heading falls back to the goreleaser rule below.
+A list item under any other heading falls back to the GoReleaser rule below.
 
 **Version sections.** When the file has version headings at level 2, only the section of the published version is read:
 
@@ -65,9 +65,9 @@ Published as `v1.0.0`, this file gives:
 ]
 ```
 
-## goreleaser
+## GoReleaser
 
-Each other list item whose message is a [Conventional Commit](https://www.conventionalcommits.org/) (`type(scope)!: description`) becomes one note. Before reading it, goreleaser's decorations are removed: the leading commit sha (`9c9d766 ` or `9c9d766: `), and a trailing author such as ` (@user)`, ` (Name <mail>)` or ` by @user in <url>`.
+Each other list item whose message is a [Conventional Commit](https://www.conventionalcommits.org/) (`type(scope)!: description`) becomes one note. Before reading it, GoReleaser's decorations are removed: the leading commit sha (`9c9d766 ` or `9c9d766: `), and a trailing author such as ` (@user)`, ` (Name <mail>)` or ` by @user in <url>`.
 
 | Commit type | `kind` |
 | --- | --- |
@@ -94,4 +94,4 @@ Everything else is ignored: headings, `**Full Changelog**` lines, and messages w
 gives `added` "CSV export", `fixed` "projects beyond 500" and `security` "bump golang.org/x/net".
 
 > [!TIP]
-> In `.goreleaser.yaml`, use `changelog.use: git` or `github`, and keep the `feat:`, `fix:`… prefixes in the messages: when goreleaser's `filters` drop them, nothing is left to read.
+> In `.goreleaser.yaml`, use `changelog.use: git` or `github`, and keep the `feat:`, `fix:`… prefixes in the messages: when GoReleaser's `filters` drop them, nothing is left to read.

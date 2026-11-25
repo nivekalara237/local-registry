@@ -21,8 +21,8 @@ Télécharge un fichier d'une version **publiée**. Les fichiers en staging ne s
 | `If-Modified-Since` | en-tête, facultatif | Téléchargement conditionnel. |
 
 ```sh
-curl -fsSO https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz
-curl -fsS -C - -O https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_windows_amd64.zip   # reprise
+curl -fsSO https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_linux_amd64.tar.gz
+curl -fsS -C - -O https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_windows_amd64.zip   # reprise
 ```
 
 En-têtes de réponse :
@@ -41,7 +41,7 @@ En-têtes de réponse :
 | `404` | Version non publiée, `version` vaut `latest`, nom invalide ou caché (`.x`), fichier absent, répertoire, ou lien symbolique qui sort du répertoire de la version. |
 
 > [!TIP]
-> Chaque fichier d'une version est listé avec son URL et son sha256 dans son `release.json` : lisez-le plutôt que de construire les URL à la main. Voir [Consommer les versions](../../guides/consume-releases.md).
+> Chaque fichier d'une version est listé avec son URL et son sha256 dans son `release.json` : lisez-le plutôt que de construire les URL à la main. Consultez [Consommer les versions](../../guides/consume-releases.md).
 
 ## Télécharger un fichier public par son chemin
 
@@ -54,7 +54,7 @@ Télécharge un fichier public par son chemin relatif au `--asset-path` du serve
 | `filePath` | chemin | Chemin relatif au répertoire de données, `/` encodé en `%2F`. |
 
 ```sh
-curl -fsS -OJ "https://registry.example.com/assets/binary/bin.local%2Fassets%2Fbinaries%2Fsonarbridge%2Fv1.4.2%2Fsonarbridge_1.4.2_checksums.txt"
+curl -fsS -OJ "https://registry.corp.example/assets/binary/bin.local%2Fassets%2Fbinaries%2Fbridge%2Fv1.4.2%2Fbridge_1.4.2_checksums.txt"
 ```
 
 Encodez le chemin avec la fonction d'échappement de chemin de votre langage : `encodeURIComponent` en JavaScript, `url.PathEscape` en Go, `urllib.parse.quote(p, safe="")` en Python.

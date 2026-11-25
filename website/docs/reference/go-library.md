@@ -1,6 +1,6 @@
 ---
 title: Go library
-description: Embed local-registry in a Go program, or read its storage directly, with the exported API of the root package.
+description: Embed Local Registry in a Go program, or read its storage directly, with the exported API of the root package.
 sidebar_label: Go library
 ---
 
@@ -27,7 +27,7 @@ import (
 )
 
 func main() {
-	const publicURL = "https://registry.example.com"
+	const publicURL = "https://registry.corp.example"
 
 	s := localregistry.NewLocalRegistryServer(8077, "0.0.0.0", "/srv/registry")
 	if err := s.SetTLS("/etc/local-registry/fullchain.pem", "/etc/local-registry/privkey.pem"); err != nil { // optional
@@ -121,11 +121,11 @@ These functions read the tree directly, as the routes do.
 
 ```go
 l := localregistry.NewLayout("/srv/registry")
-v, err := localregistry.LatestVersion(l, "sonarbridge")
+v, err := localregistry.LatestVersion(l, "bridge")
 if errors.Is(err, localregistry.ErrNotFound) {
 	// no latest version
 }
-raw, err := localregistry.ReadReleaseDocument(l, "sonarbridge", v)
+raw, err := localregistry.ReadReleaseDocument(l, "bridge", v)
 var doc localregistry.ReleaseDocument
 err = json.Unmarshal(raw, &doc)
 ```

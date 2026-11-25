@@ -70,7 +70,7 @@ const sidebars: SidebarsConfig = {
         'reference/index-json',
         'reference/changelog-format',
         'reference/upload-rules',
-        'reference/scripts',
+        'reference/localrectl',
         'reference/go-library',
       ],
     },

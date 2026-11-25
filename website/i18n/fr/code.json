@@ -3,7 +3,7 @@
     "message": "Je publie des versions"
   },
   "home.publish.body": {
-    "message": "Envoyez un build goreleaser, ou n'importe quel ensemble de fichiers, depuis votre poste ou votre CI. Chaque version est vérifiée puis publiée de façon atomique."
+    "message": "Envoyez un build GoReleaser, ou n'importe quel ensemble de fichiers, depuis votre poste ou votre CI avec localrectl. Chaque version est vérifiée puis publiée de façon atomique."
   },
   "home.publish.cta": {
     "message": "Guides de publication"
@@ -12,7 +12,7 @@
     "message": "J'exploite le registre"
   },
   "home.operate.body": {
-    "message": "Un binaire statique, aucune base de données. Installez-le, sécurisez-le avec un token et HTTPS, fixez des quotas, lisez le journal d'audit."
+    "message": "Sur votre propre serveur ou pour une équipe. Un binaire statique, aucune base de données. Installez-le, sécurisez-le avec un token et HTTPS, fixez des quotas, lisez le journal d'audit."
   },
   "home.operate.cta": {
     "message": "Exploitation"
@@ -27,13 +27,13 @@
     "message": "Consommer les versions"
   },
   "home.tagline": {
-    "message": "Un registre privé de versions pour les builds goreleaser et tout fichier versionné."
+    "message": "Un registre de versions open source, pour les builds GoReleaser et tout fichier versionné."
   },
   "home.quickstart": {
     "message": "Démarrage rapide, 5 minutes"
   },
   "home.what": {
-    "message": "Qu'est-ce que local registry ?"
+    "message": "Qu'est-ce que Local Registry ?"
   },
   "theme.ErrorPageContent.title": {
     "message": "Cette page a planté.",

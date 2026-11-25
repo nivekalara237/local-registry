@@ -3,7 +3,7 @@ title: Stockage et sauvegarde
 description: L'organisation de l'asset path, comment le sauvegarder et le restaurer, et comment retirer une version sans risque.
 ---
 
-local-registry garde tout sous forme de fichiers simples dans un seul répertoire, l'asset path. Il n'y a ni base de données ni cache : le serveur lit le disque à chaque requête. Cette page décrit l'organisation des fichiers, et les procédures qui agissent directement dessus : sauvegarde, restauration, et retrait d'une version.
+Local Registry garde tout sous forme de fichiers simples dans un seul répertoire, l'asset path. Il n'y a ni base de données ni cache : le serveur lit le disque à chaque requête. Cette page décrit l'organisation des fichiers, et les procédures qui agissent directement dessus : sauvegarde, restauration, et retrait d'une version.
 
 ## Organisation
 
@@ -46,7 +46,7 @@ L'occupation du disque est la somme de :
 - la zone de staging, plafonnée par `max-staging-mb` ;
 - le journal d'audit, qui grossit à chaque upload.
 
-Gardez en permanence `min-free-mb` d'espace libre : les uploads qui passeraient en dessous sont refusés en `507`. Voir [Quotas et staging](quotas-and-staging.md).
+Gardez en permanence `min-free-mb` d'espace libre : les uploads qui passeraient en dessous sont refusés en `507`. Consultez [Quotas et staging](quotas-and-staging.md).
 
 ## Sauvegarde
 
@@ -61,7 +61,7 @@ Les versions publiées ne changent jamais, et les fichiers qui changent (`<produ
 | `assets/` | Seulement si vous utilisez encore l'ancienne arborescence. |
 | Votre fichier de configuration | Les réglages. Il contient le token : stockez la copie comme un secret. |
 
-Ignorez `bin.local/.uploads/` et `bin.local/.uploads-tmp/` : ils contiennent du travail non publié que les publieurs peuvent renvoyer.
+Ignorez `bin.local/.uploads/` et `bin.local/.uploads-tmp/` : ils contiennent du travail non publié que les éditeurs peuvent renvoyer.
 
 ```sh
 # Chaque nuit, copie incrémentale vers une machine de sauvegarde
@@ -83,8 +83,8 @@ Pour une copie à un instant précis, préférez un instantané du système de f
 4. Démarrez le serveur, puis vérifiez un produit :
 
    ```sh
-   curl -s https://registry.example.com/products
-   curl -s https://registry.example.com/<product>/releases/latest
+   curl -s https://registry.corp.example/products
+   curl -s https://registry.corp.example/<product>/releases/latest
    ```
 
 ## Retirer une version publiée
@@ -98,7 +98,7 @@ Il n'y a pas d'API pour supprimer une version, volontairement : des clients en d
    jq -r .version release.json
    ```
 
-2. Si c'est le cas, faites d'abord d'une autre version la latest. Voir [Changer la dernière version](../guides/change-latest.md).
+2. Si c'est le cas, faites d'abord d'une autre version la latest. Consultez [Changer la dernière version](../guides/change-latest.md).
 3. Supprimez le répertoire de la version :
 
    ```sh

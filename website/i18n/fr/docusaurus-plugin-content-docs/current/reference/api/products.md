@@ -4,7 +4,7 @@ description: Lire les produits, leur index et le release.json de chaque version,
 sidebar_label: Produits
 ---
 
-Ces routes exposent les documents du [standard local-registry/v1](../../concepts/standard-v1.md) : la liste des produits et leur recherche, l'`index.json` de chaque produit et le `release.json` de chaque version. C'est le moyen recommandé de découvrir les versions, qu'elles aient été construites avec goreleaser ou non. Elles sont en lecture seule et ne demandent pas de jeton.
+Ces routes exposent les documents du [standard local-registry/v1](../../concepts/standard-v1.md) : la liste des produits et leur recherche, l'`index.json` de chaque produit et le `release.json` de chaque version. C'est le moyen recommandé de découvrir les versions, qu'elles aient été construites avec GoReleaser ou non. Elles sont en lecture seule et ne demandent pas de jeton.
 
 Seules les versions qui ont un `release.json` existent pour ces routes. Les versions publiées avant le standard restent disponibles par les routes [artifacts](./artifacts.md) et [historiques](./legacy.md).
 
@@ -15,7 +15,7 @@ Seules les versions qui ont un `release.json` existent pour ces routes. Les vers
 Liste tous les produits qui ont au moins une version avec un `release.json`, triés par nom.
 
 ```sh
-curl -s https://registry.example.com/products
+curl -s https://registry.corp.example/products
 ```
 
 ```json
@@ -28,9 +28,9 @@ curl -s https://registry.example.com/products
     "updatedAt": "2026-10-18T09:12:44Z"
   },
   {
-    "product": "sonarbridge",
-    "displayName": "SonarBridge",
-    "description": "Bridge between SonarQube and internal tools.",
+    "product": "bridge",
+    "displayName": "Bridge",
+    "description": "Sonar Bridge: bridge between SonarQube and internal tools.",
     "latest": "v1.4.2",
     "updatedAt": "2026-10-12T08:00:00Z"
   }
@@ -70,7 +70,7 @@ Renvoie, une page à la fois, les produits qui répondent à tous les critères 
 La version courante d'un produit est sa dernière version, sinon sa version la plus haute. Un produit qui a une ancienne pré-version mais une dernière version stable n'est pas une pré-version.
 
 ```sh
-curl -s "https://registry.example.com/products/search?keyword=db&label=team=billing&sort=-updatedAt&limit=1"
+curl -s "https://registry.corp.example/products/search?keyword=db&label=team=billing&sort=-updatedAt&limit=1"
 ```
 
 ```json
@@ -120,21 +120,21 @@ Renvoie la fiche du produit et toutes ses versions qui ont un `release.json`. Le
 | `product` | chemin | Nom du produit. |
 
 ```sh
-curl -s https://registry.example.com/sonarbridge/index
+curl -s https://registry.corp.example/bridge/index
 ```
 
 ```json
 {
   "apiVersion": "local-registry/v1",
-  "product": "sonarbridge",
-  "displayName": "SonarBridge",
-  "description": "Bridge between SonarQube and internal tools.",
+  "product": "bridge",
+  "displayName": "Bridge",
+  "description": "Sonar Bridge: bridge between SonarQube and internal tools.",
   "license": "Proprietary",
   "owners": [{ "name": "Platform team", "email": "platform@corp.example" }],
-  "links": [{ "name": "source", "url": "https://git.corp.example/platform/sonarbridge" }],
+  "links": [{ "name": "source", "url": "https://git.corp.example/platform/sonar-bridge" }],
   "keywords": ["sonar", "cli"],
   "labels": { "domain": "quality" },
-  "install": "curl -fsSL https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/… | tar xz\n",
+  "install": "curl -fsSL https://registry.corp.example/bridge/artifacts/v1.4.2/files/… | tar xz\n",
   "latest": "v1.4.2",
   "updatedAt": "2026-10-12T08:00:00Z",
   "versions": [
@@ -161,8 +161,8 @@ Renvoie le `release.json` d'une version, tel qu'il est stocké : ses fichiers av
 | `version` | chemin | Version exacte, ou `latest`. |
 
 ```sh
-curl -s https://registry.example.com/sonarbridge/releases/latest
-curl -s https://registry.example.com/billing-db-migrations/releases/v1.0.0
+curl -s https://registry.corp.example/bridge/releases/latest
+curl -s https://registry.corp.example/billing-db-migrations/releases/v1.0.0
 ```
 
 ```json
@@ -192,7 +192,7 @@ curl -s https://registry.example.com/billing-db-migrations/releases/v1.0.0
       "variant": null,
       "size": 2311,
       "sha256": "6c08926d953d80ba627847e1b3eaa893e6040e239a197083f83cda85341baa00",
-      "url": "https://registry.example.com/billing-db-migrations/artifacts/v1.0.0/files/billing-db-migrations_1.0.0.tar.gz",
+      "url": "https://registry.corp.example/billing-db-migrations/artifacts/v1.0.0/files/billing-db-migrations_1.0.0.tar.gz",
       "sbom": null,
       "signature": null,
       "certificate": null
@@ -200,7 +200,7 @@ curl -s https://registry.example.com/billing-db-migrations/releases/v1.0.0
   ],
   "checksums": {
     "name": "checksums.txt",
-    "url": "https://registry.example.com/billing-db-migrations/artifacts/v1.0.0/files/checksums.txt",
+    "url": "https://registry.corp.example/billing-db-migrations/artifacts/v1.0.0/files/checksums.txt",
     "signature": null,
     "certificate": null
   }

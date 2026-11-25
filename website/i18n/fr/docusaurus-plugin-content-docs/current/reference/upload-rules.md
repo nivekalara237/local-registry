@@ -10,12 +10,12 @@ Cette page est le contrat exact de `POST /{product}/artifacts/{version}/publish`
 
 | Fichier | Obligatoire | Écrit par | Remarques |
 | --- | --- | --- | --- |
-| `registry.yaml` | **oui** | l'équipe | La fiche produit. Voir [registry.yaml](./registry-yaml.md). |
+| `registry.yaml` | **oui** | l'éditeur | La fiche produit. Consultez [registry.yaml](./registry-yaml.md). |
 | au moins un artefact | **oui** | le build | Archive, binaire, paquet ou tout autre fichier. |
-| `CHANGELOG.md` | non | goreleaser ou l'équipe | Notes de version. Voir [CHANGELOG.md](./changelog-format.md). |
-| `*checksums.txt` | non | goreleaser | Un seul au plus. Sans lui, la publication écrit `checksums.txt`. |
-| `metadata.json` | non | goreleaser | Fournit `tag`, `commit`, `builtAt`… |
-| `artifacts.json` | non | goreleaser, ou à la main | Fournit le type et la plateforme de chaque fichier. Déposé en dernier. |
+| `CHANGELOG.md` | non | GoReleaser ou l'éditeur | Notes de version. Consultez [CHANGELOG.md](./changelog-format.md). |
+| `*checksums.txt` | non | GoReleaser | Un seul au plus. Sans lui, la publication écrit `checksums.txt`. |
+| `metadata.json` | non | GoReleaser | Fournit `tag`, `commit`, `builtAt`… |
+| `artifacts.json` | non | GoReleaser, ou à la main | Fournit le type et la plateforme de chaque fichier. Déposé en dernier. |
 | signatures, certificats, SBOM | non | le build | Rattachés au fichier qu'ils couvrent. |
 | `release.json`, `artifacts.goreleaser.json`, `index.json` | — | **le serveur** | Réservés : les déposer répond `400`. |
 
@@ -42,24 +42,15 @@ Elles s'exécutent dans cet ordre ; le premier échec répond.
 
 Les étapes 1 et 2 s'exécutent dès que les vérifications 9 et 10 sont passées, avant les vérifications 11 et 12. Elles ne touchent que le staging : si une vérification ultérieure échoue, la publication suivante repart de l'`artifacts.json` déposé, conservé sous le nom `artifacts.goreleaser.json`.
 
-```mermaid
-flowchart LR
-  A[vérifications] --> B[réécriture d'artifacts.json]
-  B --> C[calcul de checksums.txt]
-  C --> D[écriture de release.json]
-  D --> E[écriture de checksums.txt]
-  E --> F[renommage du staging en version]
-  F --> G[latest]
-  G --> H[index.json]
-```
+![Ce que fait la publication après les contrôles, étape par étape](/img/ref-upload-rules.svg)
 
 1. **artifacts.json** (s'il a été déposé) : le fichier déposé est conservé sous `artifacts.goreleaser.json` et remplacé par sa [réécriture](#réécriture-dartifactsjson).
-2. **checksums.txt** (si aucun fichier de checksums n'a été déposé) : calculé à partir des fichiers en staging, au format goreleaser : une ligne `<sha256>  <name>` par fichier qui en a besoin (les mêmes que pour la vérification 7), triées par nom.
-3. **release.json** est écrit dans le staging. Voir [release.json](./release-json.md).
+2. **checksums.txt** (si aucun fichier de checksums n'a été déposé) : calculé à partir des fichiers en staging, au format GoReleaser : une ligne `<sha256>  <name>` par fichier qui en a besoin (les mêmes que pour la vérification 7), triées par nom.
+3. **release.json** est écrit dans le staging. Consultez [release.json](./release-json.md).
 4. Le `checksums.txt` calculé est écrit dans le staging.
 5. **Renommage.** Le répertoire de staging `bin.local/.uploads/<product>/<version>/` est renommé en `bin.local/assets/binaries/<product>/<version>/` : la version apparaît complète, en une opération.
-6. **Latest** (avec `latest=true`) : l'`artifacts.json` de la version est copié dans `<product>/artifacts.json`, ou cette copie est supprimée quand la version n'en a pas ; puis son `release.json` est copié dans `<product>/release.json`, écrit en dernier parce que c'est la marque qui désigne la dernière version. Chaque copie est atomique (fichier temporaire, puis renommage). Voir [Dernière version](../concepts/latest.md).
-7. **index.json** : `<product>/index.json` est réécrit de façon atomique. Voir [index.json](./index-json.md).
+6. **Latest** (avec `latest=true`) : l'`artifacts.json` de la version est copié dans `<product>/artifacts.json`, ou cette copie est supprimée quand la version n'en a pas ; puis son `release.json` est copié dans `<product>/release.json`, écrit en dernier parce que c'est la marque qui désigne la dernière version. Chaque copie est atomique (fichier temporaire, puis renommage). Consultez [Dernière version](../concepts/latest.md).
+7. **index.json** : `<product>/index.json` est réécrit de façon atomique. Consultez [index.json](./index-json.md).
 
 Un échec à l'étape 6 ou 7 répond `500 internal error`, mais la version **est** publiée : le journal du serveur indique `version published but latest not updated` ou `version published but index.json not updated`. Corrigez la cause (disque, droits) et réglez latest à la main si besoin (voir [Changer la dernière version](../guides/change-latest.md)) ; jusqu'à ce que la publication suivante réécrive `index.json`, les routes de lecture voient qu'il est périmé et reconstruisent l'index depuis le disque.
 
@@ -67,7 +58,7 @@ Un échec à l'étape 6 ou 7 répond `500 internal error`, mais la version **est
 
 Ils s'exécutent au dépôt d'`artifacts.json`, puis de nouveau à la publication (vérification 9).
 
-Une entrée est un **fichier publié** quand son `type` vaut `Archive`, `File`, `Source`, `Linux Package`, `Checksum`, `Signature`, `Certificate`, `SBOM` ou `Metadata`, ou `Binary` **avec** `extra.Format` (goreleaser `formats: [binary]`). Les autres entrées sont ignorées, notamment `Binary` sans `extra.Format` : la sortie de build brute dont une archive est faite, jamais dans le fichier de checksums, souvent plusieurs fois sous le même nom.
+Une entrée est un **fichier publié** quand son `type` vaut `Archive`, `File`, `Source`, `Linux Package`, `Checksum`, `Signature`, `Certificate`, `SBOM` ou `Metadata`, ou `Binary` **avec** `extra.Format` (GoReleaser `formats: [binary]`). Les autres entrées sont ignorées, notamment `Binary` sans `extra.Format` : la sortie de build brute dont une archive est faite, jamais dans le fichier de checksums, souvent plusieurs fois sous le même nom.
 
 | Règle | Message `422` |
 | --- | --- |
@@ -86,17 +77,17 @@ L'`artifacts.json` publié ne garde que les entrées publiées, dans leur ordre 
 Entrée déposée :
 
 ```json
-{"name": "sonarbridge_1.4.2_linux_amd64.tar.gz", "path": "dist/sonarbridge_1.4.2_linux_amd64.tar.gz",
+{"name": "bridge_1.4.2_linux_amd64.tar.gz", "path": "dist/bridge_1.4.2_linux_amd64.tar.gz",
  "goos": "linux", "goarch": "amd64", "goamd64": "v1", "internal_type": 1, "type": "Archive",
- "extra": {"Checksum": "sha256:3f1c…", "Format": "tar.gz", "ID": "sonarbridge"}}
+ "extra": {"Checksum": "sha256:3f1c…", "Format": "tar.gz", "ID": "bridge"}}
 ```
 
-Entrée publiée, avec `--public-url https://registry.example.com` :
+Entrée publiée, avec `--public-url https://registry.corp.example` :
 
 ```json
-{"extra": {"Checksum": "sha256:3f1c…", "Format": "tar.gz", "ID": "sonarbridge"},
- "goamd64": "v1", "goarch": "amd64", "goos": "linux", "internal_type": 1, "name": "sonarbridge_1.4.2_linux_amd64.tar.gz",
- "path": "https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz", "type": "Archive"}
+{"extra": {"Checksum": "sha256:3f1c…", "Format": "tar.gz", "ID": "bridge"},
+ "goamd64": "v1", "goarch": "amd64", "goos": "linux", "internal_type": 1, "name": "bridge_1.4.2_linux_amd64.tar.gz",
+ "path": "https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_linux_amd64.tar.gz", "type": "Archive"}
 ```
 
 ## Garanties

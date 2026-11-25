@@ -4,7 +4,7 @@ description: Normative reference of release.json, the document the server writes
 sidebar_label: release.json
 ---
 
-`release.json` describes one published version: its files with platform, size, sha256 and download URL, its signatures and SBOMs, its checksums file and its release notes. The server writes it at publish, inside the version, so it appears with the version and never changes afterwards. It is the document clients should read; it exists for every version, built with goreleaser or not.
+`release.json` describes one published version: its files with platform, size, sha256 and download URL, its signatures and SBOMs, its checksums file and its release notes. The server writes it at publish, inside the version, so it appears with the version and never changes afterwards. It is the document clients should read; it exists for every version, built with GoReleaser or not.
 
 It is served by `GET /{product}/releases/{version}` (`latest` allowed, see [Products API](./api/products.md)) and as a file, `GET /{product}/artifacts/{version}/files/release.json`.
 
@@ -13,8 +13,8 @@ It is served by `GET /{product}/releases/{version}` (`latest` allowed, see [Prod
 ```json
 {
   "apiVersion": "local-registry/v1",
-  "product": "sonarbridge",
-  "displayName": "SonarBridge",
+  "product": "bridge",
+  "displayName": "Bridge",
   "version": "v1.4.2",
   "tag": "v1.4.2",
   "previousTag": "v1.4.1",
@@ -31,7 +31,7 @@ It is served by `GET /{product}/releases/{version}` (`latest` allowed, see [Prod
   ],
   "artifacts": [
     {
-      "name": "sonarbridge_1.4.2_linux_amd64.tar.gz",
+      "name": "bridge_1.4.2_linux_amd64.tar.gz",
       "kind": "archive",
       "format": "tar.gz",
       "mediaType": "application/gzip",
@@ -40,8 +40,8 @@ It is served by `GET /{product}/releases/{version}` (`latest` allowed, see [Prod
       "variant": "v1",
       "size": 4821337,
       "sha256": "3f1c…",
-      "url": "https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz",
-      "sbom": "https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz.sbom.json",
+      "url": "https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_linux_amd64.tar.gz",
+      "sbom": "https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_linux_amd64.tar.gz.sbom.json",
       "signature": null,
       "certificate": null
     },
@@ -55,16 +55,16 @@ It is served by `GET /{product}/releases/{version}` (`latest` allowed, see [Prod
       "variant": null,
       "size": 18213,
       "sha256": "9ab0…",
-      "url": "https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/migrations.sql",
+      "url": "https://registry.corp.example/bridge/artifacts/v1.4.2/files/migrations.sql",
       "sbom": null,
       "signature": null,
       "certificate": null
     }
   ],
   "checksums": {
-    "name": "sonarbridge_1.4.2_checksums.txt",
-    "url": "https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_checksums.txt",
-    "signature": "https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_checksums.txt.sigstore.json",
+    "name": "bridge_1.4.2_checksums.txt",
+    "url": "https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_checksums.txt",
+    "signature": "https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_checksums.txt.sigstore.json",
     "certificate": null
   }
 }
@@ -84,7 +84,7 @@ It is served by `GET /{product}/releases/{version}` (`latest` allowed, see [Prod
 | `previousTag` | string or null | `previous_tag` of `metadata.json`. |
 | `prerelease` | boolean | `true` when `version` is a semver pre-release, such as `v1.5.0-rc.1`. |
 | `commit` | string or null | `commit` of `metadata.json`. |
-| `builtAt` | string or null | `date` of `metadata.json`, as goreleaser wrote it. |
+| `builtAt` | string or null | `date` of `metadata.json`, as GoReleaser wrote it. |
 | `publishedAt` | string | Server clock at publish, UTC, RFC 3339. |
 | `publishedBy` | string | `token_id` of the upload token: the first 12 hex digits of its sha256, never the token. |
 | `deprecated` | boolean or string | `deprecated` of `registry.yaml`: `false`, `true` or a message. |
@@ -135,9 +135,9 @@ The checksums file is the `Checksum` entry of `artifacts.json`, else the uploade
 
 ## Kinds
 
-With an `artifacts.json`, each published entry's goreleaser `type` gives its role:
+With an `artifacts.json`, each published entry's GoReleaser `type` gives its role:
 
-| goreleaser type | `kind` | Note |
+| GoReleaser type | `kind` | Note |
 | --- | --- | --- |
 | `Archive` | `archive` | `format`: `tar.gz`, `zip`… |
 | `Binary` with `extra.Format` | `binary` | A binary published without an archive. |

@@ -8,10 +8,10 @@ Consumers that ask for `latest` get one version of the product. This guide shows
 
 ## At publish time
 
-Pass `--latest` to `upload.sh`, or `?latest=true` to the publish call:
+Pass `--latest` to `localrectl publish`, or `?latest=true` to the publish call:
 
 ```sh
-ci/upload.sh --latest sonarbridge dist/artifacts.json
+localrectl publish bridge --goreleaser-dir dist --product-file registry.yaml --latest
 ```
 
 A version published without `--latest` is available by its number, but does not change `latest`. Use this for pre-releases and for fixes to older lines (for example a `v1.3.9` published after `v1.4.2`).
@@ -23,12 +23,12 @@ A version published without `--latest` is available by its number, but does not 
 
 There is no API route to change `latest`. An operator does it on the server, in the published tree, by copying two files.
 
-The latest version is the one named by `<product>/release.json`. For goreleaser clients, `<product>/artifacts.json` is a copy of that version's `artifacts.json`. Change both together.
+The latest version is the one named by `<product>/release.json`. For GoReleaser clients, `<product>/artifacts.json` is a copy of that version's `artifacts.json`. Change both together.
 
 1. **Go to the product's directory.**
 
    ```sh
-   cd <asset-path>/bin.local/assets/binaries/sonarbridge
+   cd <asset-path>/bin.local/assets/binaries/bridge
    ls     # one directory per published version, plus release.json, index.json…
    ```
 
@@ -47,11 +47,11 @@ The latest version is the one named by `<product>/release.json`. For goreleaser 
 3. **Check.** The change is visible at once: the routes read these files at each request.
 
    ```sh
-   curl -fsS https://registry.example.com/sonarbridge/releases/latest | jq -r .version
-   curl -fsS https://registry.example.com/sonarbridge/index | jq -r .latest
+   curl -fsS https://registry.corp.example/bridge/releases/latest | jq -r .version
+   curl -fsS https://registry.corp.example/bridge/index | jq -r .latest
    ```
 
-The `index.json` file on disk is only rewritten at the next publish of the product. Until then, `GET /sonarbridge/index` sees that its `latest` is no longer the current one, and rebuilds the index from the disk.
+The `index.json` file on disk is only rewritten at the next publish of the product. Until then, `GET /bridge/index` sees that its `latest` is no longer the current one, and rebuilds the index from the disk.
 
 ## Roll back a bad release
 

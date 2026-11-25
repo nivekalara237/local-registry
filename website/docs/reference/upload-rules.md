@@ -10,12 +10,12 @@ This page is the exact contract of `POST /{product}/artifacts/{version}/publish`
 
 | File | Required | Written by | Notes |
 | --- | --- | --- | --- |
-| `registry.yaml` | **yes** | the team | The product card. See [registry.yaml](./registry-yaml.md). |
+| `registry.yaml` | **yes** | the publisher | The product card. See [registry.yaml](./registry-yaml.md). |
 | at least one artifact | **yes** | build | Archive, binary, package, or any other file. |
-| `CHANGELOG.md` | no | goreleaser or the team | Release notes. See [CHANGELOG.md](./changelog-format.md). |
-| `*checksums.txt` | no | goreleaser | At most one. Without it, publish writes `checksums.txt`. |
-| `metadata.json` | no | goreleaser | Gives `tag`, `commit`, `builtAt`… |
-| `artifacts.json` | no | goreleaser, or by hand | Gives each file's type and platform. Uploaded last. |
+| `CHANGELOG.md` | no | GoReleaser or the publisher | Release notes. See [CHANGELOG.md](./changelog-format.md). |
+| `*checksums.txt` | no | GoReleaser | At most one. Without it, publish writes `checksums.txt`. |
+| `metadata.json` | no | GoReleaser | Gives `tag`, `commit`, `builtAt`… |
+| `artifacts.json` | no | GoReleaser, or by hand | Gives each file's type and platform. Uploaded last. |
 | signatures, certificates, SBOMs | no | build | Attached to the file they cover. |
 | `release.json`, `artifacts.goreleaser.json`, `index.json` | — | **the server** | Reserved: uploading them answers `400`. |
 
@@ -42,19 +42,10 @@ They run in this order; the first failure answers.
 
 Steps 1 and 2 run as soon as checks 9 and 10 have passed, before checks 11 and 12. They only touch staging: if a later check fails, the next publish starts again from the uploaded `artifacts.json`, kept as `artifacts.goreleaser.json`.
 
-```mermaid
-flowchart LR
-  A[checks] --> B[rewrite artifacts.json]
-  B --> C[compute checksums.txt]
-  C --> D[write release.json]
-  D --> E[write checksums.txt]
-  E --> F[rename staging to the version]
-  F --> G[latest]
-  G --> H[index.json]
-```
+![What publish does after the checks, step by step](/img/ref-upload-rules.svg)
 
 1. **artifacts.json** (when uploaded): the uploaded file is kept as `artifacts.goreleaser.json` and replaced by its [rewrite](#artifactsjson-rewrite).
-2. **checksums.txt** (when no checksums file was uploaded): computed from the staged files, in goreleaser's format: one `<sha256>  <name>` line per file that needs one (the same files as check 7), sorted by name.
+2. **checksums.txt** (when no checksums file was uploaded): computed from the staged files, in GoReleaser's format: one `<sha256>  <name>` line per file that needs one (the same files as check 7), sorted by name.
 3. **release.json** is written into staging. See [release.json](./release-json.md).
 4. The computed `checksums.txt` is written into staging.
 5. **Rename.** The staging directory `bin.local/.uploads/<product>/<version>/` is renamed to `bin.local/assets/binaries/<product>/<version>/`: the version appears complete, in one operation.
@@ -67,7 +58,7 @@ A failure in step 6 or 7 answers `500 internal error`, but the version **is** pu
 
 These run when `artifacts.json` is uploaded, and again at publish (check 9).
 
-An entry is a **published file** when its `type` is `Archive`, `File`, `Source`, `Linux Package`, `Checksum`, `Signature`, `Certificate`, `SBOM` or `Metadata`, or `Binary` **with** `extra.Format` (goreleaser `formats: [binary]`). Other entries are ignored, notably `Binary` without `extra.Format`: the raw build output an archive is made from, never in the checksums file, often several with the same name.
+An entry is a **published file** when its `type` is `Archive`, `File`, `Source`, `Linux Package`, `Checksum`, `Signature`, `Certificate`, `SBOM` or `Metadata`, or `Binary` **with** `extra.Format` (GoReleaser `formats: [binary]`). Other entries are ignored, notably `Binary` without `extra.Format`: the raw build output an archive is made from, never in the checksums file, often several with the same name.
 
 | Rule | `422` message |
 | --- | --- |
@@ -86,17 +77,17 @@ The published `artifacts.json` keeps only the published entries, in their origin
 Uploaded entry:
 
 ```json
-{"name": "sonarbridge_1.4.2_linux_amd64.tar.gz", "path": "dist/sonarbridge_1.4.2_linux_amd64.tar.gz",
+{"name": "bridge_1.4.2_linux_amd64.tar.gz", "path": "dist/bridge_1.4.2_linux_amd64.tar.gz",
  "goos": "linux", "goarch": "amd64", "goamd64": "v1", "internal_type": 1, "type": "Archive",
- "extra": {"Checksum": "sha256:3f1c…", "Format": "tar.gz", "ID": "sonarbridge"}}
+ "extra": {"Checksum": "sha256:3f1c…", "Format": "tar.gz", "ID": "bridge"}}
 ```
 
-Published entry, with `--public-url https://registry.example.com`:
+Published entry, with `--public-url https://registry.corp.example`:
 
 ```json
-{"extra": {"Checksum": "sha256:3f1c…", "Format": "tar.gz", "ID": "sonarbridge"},
- "goamd64": "v1", "goarch": "amd64", "goos": "linux", "internal_type": 1, "name": "sonarbridge_1.4.2_linux_amd64.tar.gz",
- "path": "https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz", "type": "Archive"}
+{"extra": {"Checksum": "sha256:3f1c…", "Format": "tar.gz", "ID": "bridge"},
+ "goamd64": "v1", "goarch": "amd64", "goos": "linux", "internal_type": 1, "name": "bridge_1.4.2_linux_amd64.tar.gz",
+ "path": "https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_linux_amd64.tar.gz", "type": "Archive"}
 ```
 
 ## Guarantees

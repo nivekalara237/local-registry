@@ -1,10 +1,10 @@
 ---
 title: API historique
-description: Les routes POST /releases qui listent les fichiers d'une version, conservées pour les clients existants.
+description: Les routes POST /releases qui listent les fichiers bruts d'une version avec leur URL de téléchargement.
 sidebar_label: Historique
 ---
 
-Ces routes listent les fichiers d'une version avec leur URL de téléchargement. Elles précèdent le [standard local-registry/v1](../../concepts/standard-v1.md) et restent pour les clients existants. Les nouveaux clients devraient lire [`GET /{product}/releases/{version}`](./products.md), qui donne aussi la plateforme, la taille et le sha256 de chaque fichier.
+Ces routes listent les fichiers d'une version avec leur URL de téléchargement. Elles renvoient une liste de fichiers brute, sans les informations du [standard local-registry/v1](../../concepts/standard-v1.md). Préférez [`GET /{product}/releases/{version}`](./products.md), qui donne aussi la plateforme, la taille et le sha256 de chaque fichier.
 
 ## Lister les fichiers d'une version
 
@@ -25,16 +25,16 @@ Les fichiers sont lus dans le premier répertoire qui existe :
 | 2 | Arborescence historique `assets/binaries/<product>/<version>/` | `/assets/binary/assets%2Fbinaries%2F<product>%2F<version>%2F<name>` |
 
 ```sh
-curl -s -X POST https://registry.example.com/releases/sonarbridge/latest
+curl -s -X POST https://registry.corp.example/releases/bridge/latest
 ```
 
 ```json
 {
   "tag_name": "v1.4.2",
   "assets": [
-    {"id": "4c229d4f-3bb0-5e36-8d08-ae51796b420a", "name": "artifacts.goreleaser.json", "url": "https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/artifacts.goreleaser.json", "is_checksum": false},
-    {"id": "04647fbf-38ae-503e-a543-104c5aad6870", "name": "sonarbridge_1.4.2_checksums.txt", "url": "https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_checksums.txt", "is_checksum": true},
-    {"id": "dc3de688-c35d-54d9-8e27-23638e997a71", "name": "sonarbridge_1.4.2_linux_amd64.tar.gz", "url": "https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz", "is_checksum": false}
+    {"id": "4c229d4f-3bb0-5e36-8d08-ae51796b420a", "name": "artifacts.goreleaser.json", "url": "https://registry.corp.example/bridge/artifacts/v1.4.2/files/artifacts.goreleaser.json", "is_checksum": false},
+    {"id": "04647fbf-38ae-503e-a543-104c5aad6870", "name": "bridge_1.4.2_checksums.txt", "url": "https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_checksums.txt", "is_checksum": true},
+    {"id": "dc3de688-c35d-54d9-8e27-23638e997a71", "name": "bridge_1.4.2_linux_amd64.tar.gz", "url": "https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_linux_amd64.tar.gz", "is_checksum": false}
   ]
 }
 ```
@@ -51,8 +51,8 @@ curl -s -X POST https://registry.example.com/releases/sonarbridge/latest
 Télécharger tous les fichiers d'une version :
 
 ```sh
-BASE=https://registry.example.com
-curl -s -X POST $BASE/releases/sonarbridge/latest | jq -r '.assets[] | [.name, .url] | @tsv' |
+BASE=https://registry.corp.example
+curl -s -X POST $BASE/releases/bridge/latest | jq -r '.assets[] | [.name, .url] | @tsv' |
   while IFS=$'\t' read -r name url; do
     case $url in http*) ;; *) url=$BASE$url ;; esac
     curl -fsS -o "$name" "$url"
@@ -76,4 +76,4 @@ Link: </releases/gitlab/{version}>; rel="successor-version"
 ```
 
 > [!WARNING]
-> Cette route est dépréciée et sera supprimée dans une prochaine version majeure. Appelez `POST /releases/gitlab/{version}`, ou mieux `GET /gitlab/releases/{version}`.
+> Cette route est dépréciée : ses réponses portent l'en-tête `Deprecation: true`. Appelez `POST /releases/gitlab/{version}`, ou mieux `GET /gitlab/releases/{version}`.

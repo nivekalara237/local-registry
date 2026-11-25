@@ -3,7 +3,7 @@ title: Supervision
 description: Health check, sortie au démarrage, logs de requêtes, codes de sortie et délais du serveur.
 ---
 
-local-registry expose un point de santé, écrit une ligne de log par requête, et utilise des codes de sortie sur lesquels votre superviseur peut agir. Cette page les liste, avec ce qui mérite une alerte. Le serveur n'a pas de point de métriques : tirez vos métriques des logs de requêtes et du [journal d'audit](audit-log.md).
+Local Registry expose un point de santé, écrit une ligne de log par requête, et utilise des codes de sortie sur lesquels votre superviseur peut agir. Cette page les liste, avec ce qui mérite une alerte. Le serveur n'a pas de point de métriques : tirez vos métriques des logs de requêtes et du [journal d'audit](audit-log.md).
 
 ## Health check
 
@@ -81,7 +81,7 @@ Autres lignes possibles :
 | --- | --- |
 | `0` | Arrêt propre : après `SIGINT` ou `SIGTERM`, toutes les requêtes en cours ont fini en moins de 10 secondes. |
 | `1` | Le serveur a échoué : port occupé, adresse indisponible, certificat ou clé TLS invalide, journal d'audit impossible à ouvrir, ou requêtes encore en cours 10 secondes après le signal d'arrêt (`Error: context deadline exceeded`). |
-| `2` | Erreur de ligne de commande ou de configuration. Rien n'a démarré. Voir [Configuration](configuration.md). |
+| `2` | Erreur de ligne de commande ou de configuration. Rien n'a démarré. Consultez [Configuration](configuration.md). |
 
 Avec systemd, `Restart=on-failure` redémarre sur `1` et aussi sur `2`. Une erreur de configuration tourne alors en boucle : `journalctl -u local-registry` affiche le message.
 

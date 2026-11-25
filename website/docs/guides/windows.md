@@ -1,68 +1,59 @@
 ---
 title: Publish from Windows
 sidebar_label: Windows
-description: Run upload.sh on Windows with Git Bash, and avoid the line-ending and path pitfalls.
+description: Publish from Windows with the native localrectl binary, and avoid the path and certificate pitfalls.
 ---
 
-`upload.sh` is a bash script. On Windows, run it from **Git Bash** (installed with Git for Windows), MSYS2 or WSL. This page lists what to install and the pitfalls specific to Windows. The steps themselves are the same as in [Publish with goreleaser](publish-with-goreleaser.md) and [Publish plain files](publish-plain-files.md).
+[`localrectl`](../reference/localrectl.md) ships a native Windows binary: no bash, curl or jq is needed to publish. This page covers what is specific to Windows. The steps themselves are the same as in [Publish with GoReleaser](publish-with-goreleaser.md) and [Publish plain files](publish-plain-files.md).
 
-## Install the tools
+## Install localrectl
 
-| Tool | Where it comes from |
-| --- | --- |
-| `bash`, `sha256sum`, `tar` | Git for Windows (Git Bash) |
-| `curl` | Windows 10 and later, and Git for Windows |
-| `jq` | Not included: install `jq.exe` from [jqlang.org](https://jqlang.org/download/), or with a package manager such as `winget` or `scoop`, and make sure it is on the `PATH` of Git Bash |
+Download the Windows binary from the [localrectl Releases page](https://github.com/nivekalara237/localrectl/releases), check it against the checksums file published with it, and put it in a folder of your `PATH`.
 
-Check them in Git Bash:
+Check that it reaches the registry:
 
-```sh
-bash --version && curl --version && jq --version && sha256sum --version
+```powershell
+$env:LOCAL_REGISTRY_URL = "https://registry.corp.example"
+localrectl ping
 ```
+
+`localrectl completion powershell` prints the completion script for PowerShell.
 
 ## Publish
 
-```sh
-export LOCAL_REGISTRY_URL=https://registry.example.com
-export LOCAL_REGISTRY_UPLOAD_TOKEN=…   # from your secret store
-./ci/upload.sh --latest --root . sonarbridge dist/artifacts.json
+```powershell
+$env:LOCAL_REGISTRY_URL = "https://registry.corp.example"
+$env:LOCAL_REGISTRY_UPLOAD_TOKEN = "…"   # from your secret store, never on the command line
+
+localrectl publish bridge --goreleaser-dir dist --product-file registry.yaml --changelog-file dist/CHANGELOG.md --latest
 ```
 
-Run it from Git Bash, not from PowerShell or `cmd.exe`. In WSL, everything behaves as on Linux: install the Linux `jq` there.
+`localrectl` reads the token from `LOCAL_REGISTRY_UPLOAD_TOKEN` and never prints it. Add `--dry-run` to see what would be sent without sending anything.
+
+## Download
+
+Without a selection, `localrectl download` takes the archive for the current machine: the zip on Windows.
+
+```powershell
+localrectl download bridge --extract -d C:\tools\bridge
+```
 
 ## Pitfalls
 
-### `jq.exe` and line endings
-
-The native `jq.exe` ends its lines with CRLF. A stray carriage return in a name or a checksum breaks the URL, and the server answers `400 Bad Request`. `upload.sh` removes these carriage returns itself. If you see `)UT …` lines or a `400` with an older copy of the script, update it from a recent local-registry release.
-
-> [!WARNING]
-> `publish-to-local-registry.sh` does not handle `jq.exe` output, and is meant for POSIX systems. Use `upload.sh` on Windows.
-
-### Scripts checked out with CRLF
-
-If Git converts line endings (`core.autocrlf=true`), a script checked out with CRLF fails with `$'\r': command not found`. Keep shell scripts in LF with a `.gitattributes` file at the root of your repository:
-
-```
-*.sh text eol=lf
-```
-
-Then check the files out again: `git rm --cached -r . && git reset --hard`. Commit or stash your changes before you run this.
+### Line endings
 
 `registry.yaml`, `CHANGELOG.md` and checksums files may use CRLF: the server accepts both line endings.
 
-### Paths
+### File names
 
-- Use forward slashes and relative paths: `dist/artifacts.json`, `--root .`.
-- Pass `--root .` when you run the script from the directory goreleaser ran in. The script then reads every `path` of `artifacts.json` from there.
-- File names published to the registry may only use `A-Z a-z 0-9 . _ -`. Rename files with spaces or accents before you publish.
+File names published to the registry may only use `A-Z a-z 0-9 . _ -`. Rename files with spaces or accents before you publish.
 
-### Self-signed certificates
+### Private certificates
 
-If the registry uses a certificate from your company's CA, point curl at it:
+If the registry uses a certificate from a private CA, give that CA's certificate to `localrectl`:
 
-```sh
-export CURL_CA_BUNDLE=/c/certs/corp-ca.pem
+```powershell
+$env:LOCAL_REGISTRY_CA_FILE = "C:\certs\corp-ca.pem"
 ```
 
 More fixes in [Troubleshooting](../troubleshooting.md).

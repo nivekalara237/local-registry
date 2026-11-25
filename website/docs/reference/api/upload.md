@@ -4,11 +4,11 @@ description: Upload the files of a version to staging, then publish them atomica
 sidebar_label: Upload
 ---
 
-A version is published in two steps: upload each file to the staging area of the version, then publish it. Publishing checks the staged files as a whole and makes the version visible in one operation; until then, nothing is public. The concept is explained in [Staging and publish](../../concepts/staging-and-publish.md); the scripts that do it for you are in [Scripts](../scripts.md).
+A version is published in two steps: upload each file to the staging area of the version, then publish it. Publishing checks the staged files as a whole and makes the version visible in one operation; until then, nothing is public. The concept is explained in [Staging and publish](../../concepts/staging-and-publish.md); the client that does it for you is [localrectl](../localrectl.md).
 
 ```mermaid
 sequenceDiagram
-  participant C as Client (CI, upload.sh)
+  participant C as Client (CI, localrectl)
   participant S as local-registry
   C->>S: PUT …/files/registry.yaml
   C->>S: PUT …/files/NAME for each file (X-Checksum-Sha256)
@@ -57,7 +57,7 @@ Streams one file into the staging area of `<product>/<version>`. Nothing is visi
 ```sh
 f=billing-db-migrations_1.0.0.tar.gz
 auth | curl -fsS -H @- -H "X-Checksum-Sha256: $(shasum -a 256 "$f" | cut -d' ' -f1)" \
-  -T "$f" "https://registry.example.com/billing-db-migrations/artifacts/v1.0.0/files/$f"
+  -T "$f" "https://registry.corp.example/billing-db-migrations/artifacts/v1.0.0/files/$f"
 ```
 
 `201 Created`:
@@ -117,7 +117,7 @@ Checks the staged files of `<product>/<version>`, writes the version's documents
 | `Authorization` | header | `Bearer <token>`. |
 
 ```sh
-auth | curl -fsS -H @- -X POST "https://registry.example.com/billing-db-migrations/artifacts/v1.0.0/publish?latest=true"
+auth | curl -fsS -H @- -X POST "https://registry.corp.example/billing-db-migrations/artifacts/v1.0.0/publish?latest=true"
 ```
 
 `200 OK`:

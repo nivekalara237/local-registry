@@ -36,3 +36,44 @@ jobs:
       - run: npm run typecheck
       # Broken links, anchors and Markdown links fail the build (docusaurus.config.ts).
       - run: npm run build
+        env:
+          DOCS_BASE_URL: "/"
+          DOCS_URL: "https://local-registry.nivekaa.com"
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          path: website/build/
+          name: build-data
+          retention-days: 1
+          if-no-files-found: error
+
+  deploy-aws:
+    name: Deploy website to S3
+    needs: build
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-22.04
+    environment: aws
+
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: build/
+          name: build-data
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ vars.AWS_REGION }}
+          audience: 'sts.amazonaws.com'
+          output-env-credentials: 'true'
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Deploy to S3
+        run: |
+          aws s3 sync build/ "s3://$AWS_S3_BUCKET" --exclude "*" --include "assets/*" --include "fr/assets/*" \
+            --cache-control "public, max-age=31536000, immutable"
+          aws s3 sync build/ "s3://$AWS_S3_BUCKET" --delete --exclude "assets/*" --exclude "fr/assets/*" \
+            --cache-control "public, max-age=60"
+          aws s3 sync build/ "s3://$AWS_S3_BUCKET" --delete --exclude "*" --include "assets/*" --include "fr/assets/*"
+        env:
+          AWS_S3_BUCKET: "local-registry.nivekaa.com"

@@ -4,11 +4,13 @@ sidebar_label: Écrire registry.yaml
 description: Écrire registry.yaml, la fiche produit que chaque version doit porter, et la vérifier avant de publier.
 ---
 
-`registry.yaml` est la fiche de votre produit : son nom, ses responsables, ses liens et la façon de l'installer. Chaque version doit en porter une : le registre refuse de publier sans elle. Ce guide écrit une bonne fiche et repère les erreurs avant la publication.
+`registry.yaml` est la fiche descriptive de votre produit. Elle contient son nom, ses responsables, ses liens et ses instructions d'installation. Chaque version doit être accompagnée de cette fiche : le registre refuse toute publication qui n'en contient pas. Ce guide explique comment rédiger une fiche valide et détecter les erreurs avant la publication.
 
-## Où la placer
+## Où placer le fichier
 
-Gardez `registry.yaml` à la racine de votre dépôt et commitez-la avec le code. `upload.sh` la trouve là, ou prend le fichier passé avec `--product-file`. La fiche est envoyée avec chaque version : chaque version garde donc la fiche avec laquelle elle a été publiée. La page du produit (`index.json`) affiche la fiche de la dernière version.
+Vous pouvez créer `registry.yaml` dans le répertoire de votre choix et le versionner avec le code. Lors de la publication, indiquez son chemin à `localrectl` avec l'option `--product-file`.
+
+La fiche est transmise avec chaque version publiée. Chaque version conserve ainsi les informations du produit telles qu'elles étaient au moment de sa publication. La page du produit (`index.json`) présente la fiche associée à la dernière version publiée.
 
 ## Un exemple complet
 
@@ -17,25 +19,25 @@ Gardez `registry.yaml` à la racine de votre dépôt et commitez-la avec le code
 apiVersion: local-registry/v1
 
 # Le nom affiché. Jusqu'à 100 caractères.
-displayName: SonarBridge
+displayName: Bridge
 
 # Une ou deux phrases : ce que fait le produit, pour qui. Jusqu'à 500 caractères.
-description: Bridge between SonarQube and internal tools.
+description: "Sonar Bridge : pont entre SonarQube et les outils internes."
 
 # Un identifiant SPDX (MIT, Apache-2.0…) ou "Proprietary".
 license: Proprietary
 
-# Qui contacter. "email" est optionnel.
+# Qui contacter. "email" est facultatif.
 owners:
-  - name: Platform team
+  - name: Équipe plateforme
     email: platform@corp.example
 
 # Pages utiles. Les URL doivent commencer par http:// ou https://.
 links:
-  - { name: source, url: https://git.corp.example/platform/sonarbridge }
-  - { name: docs, url: https://docs.corp.example/sonarbridge }
+  - { name: source, url: https://git.corp.example/platform/sonar-bridge }
+  - { name: docs, url: https://docs.corp.example/bridge }
 
-# Jusqu'à 20 mots pour chercher et filtrer.
+# Jusqu'à 20 mots-clés pour rechercher et filtrer le produit.
 keywords: [sonar, cli]
 
 # Paires clé/valeur libres pour votre inventaire. Jusqu'à 50.
@@ -45,46 +47,59 @@ labels:
 
 # Markdown, affiché tel quel. Jusqu'à 10 Kio.
 install: |
-  Download the archive of your platform and unpack it:
+  Téléchargez l'archive de votre plateforme et décompressez-la :
 
-      curl -fsSL https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz | tar xz
+      curl -fsSL https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_linux_amd64.tar.gz | tar xz
 
 # false, true, ou un message.
 deprecated: false
 ```
 
-Seul `apiVersion` est obligatoire. Chaque champ et chaque limite sont dans la [référence de registry.yaml](../reference/registry-yaml.md).
+Seul `apiVersion` est obligatoire. La description de chaque champ et les limites associées sont disponibles dans la [référence de registry.yaml](../reference/registry-yaml.md).
 
-## La vérifier avant de publier
+## Vérifier la fiche avant de publier
 
-Le serveur vérifie la fiche à la réception et répond `422 registry.yaml: <raison>` si elle est incorrecte. Vérifiez-la plus tôt, dans vos merge requests, avec le schéma JSON fourni dans chaque release de local-registry (`schema/registry.schema.json`) :
+Le serveur valide automatiquement la fiche à sa réception et renvoie une erreur `422 registry.yaml: <raison>` si son contenu est incorrect.
+
+Vous pouvez également effectuer cette vérification localement, avant de lancer la publication, à l'aide du schéma JSON fourni dans les archives de release de Local Registry (`schema/registry.schema.json`).
+
+Installez d'abord l'outil `check-jsonschema` :
 
 ```sh
 pip install check-jsonschema
+```
+
+Puis indiquez le chemin du fichier à vérifier et celui du schéma :
+
+```sh
 check-jsonschema --schemafile schema/registry.schema.json registry.yaml
 ```
+
+Remplacez `registry.yaml` par le chemin de votre fichier s'il se trouve dans un autre répertoire.
+
+Si vous avez accès au registre, `localrectl validate registry.yaml` vérifie aussi la fiche avec le schéma du serveur. Consultez [localrectl](../reference/localrectl.md).
 
 ## Erreurs fréquentes
 
 | Erreur | Effet | Correction |
 | --- | --- | --- |
-| Fiche copiée d'un autre produit, `displayName` inchangé | Votre produit s'affiche sous le nom d'un autre | Relisez `displayName`, `description` et `links` quand vous copiez une fiche |
-| Une faute dans une clé, comme `displayname` | `422 registry.yaml: …` : les clés inconnues sont refusées | Utilisez exactement les clés ci-dessus |
-| Une section `changes:` | `422` : les notes de version n'ont pas leur place dans la fiche | Écrivez un `CHANGELOG.md` : voir [Écrire les notes de version](write-changelog.md) |
-| `license: Prioritary` | Accepté, mais faux dans tous les inventaires | Utilisez un identifiant SPDX ou `Proprietary` |
-| Un lien sans schéma, comme `git.corp.example/…` | `422` | Écrivez l'URL complète `https://…` |
-| `install` qui pointe vers un autre produit ou une autre version | Les utilisateurs installent la mauvaise chose | Gardez les noms de produit et de fichiers de ce produit |
-| Plusieurs documents YAML (`---`) | `422` | Un seul document par fichier |
+| Fiche copiée d'un autre produit, `displayName` inchangé | Votre produit s'affiche sous le nom d'un autre | Vérifiez `displayName`, `description` et `links` lorsque vous réutilisez une fiche existante |
+| Une faute dans une clé, comme `displayname` | `422 registry.yaml: …` : les clés inconnues sont refusées | Utilisez exactement les noms de clés documentés |
+| Une section `changes:` | `422` : les notes de version n'ont pas leur place dans la fiche | Utilisez un fichier `CHANGELOG.md` : consultez [Écrire les notes de version](write-changelog.md) |
+| `license: Prioritary` | Accepté, mais incorrect dans les inventaires | Utilisez un identifiant SPDX ou `Proprietary` |
+| Un lien sans schéma, comme `git.corp.example/…` | `422` | Indiquez une URL complète commençant par `https://` |
+| `install` qui pointe vers un autre produit ou une autre version | Les utilisateurs installent le mauvais produit ou la mauvaise version | Vérifiez les noms de produit, les versions et les URLs des fichiers |
+| Plusieurs documents YAML (`---`) | `422` | Limitez le fichier à un seul document YAML |
 
 > [!TIP]
-> Les nombres et booléens de `labels` sont lus comme du texte : `cost-center: 4512` devient `"4512"`. Mettez-les quand même entre guillemets, pour que ce soit explicite.
+> Les nombres et les booléens dans `labels` sont interprétés comme du texte : `cost-center: 4512` devient `"4512"`. Il est néanmoins recommandé de les entourer de guillemets pour rendre cette intention explicite.
 
 ## Déprécier un produit
 
-Renseignez `deprecated` dans la fiche d'une nouvelle version, avec un message qui dit aux utilisateurs quoi faire :
+Pour signaler qu'un produit est déprécié, renseignez le champ `deprecated` dans la fiche fournie avec une nouvelle version. Ajoutez un message indiquant aux utilisateurs quelle solution privilégier :
 
 ```yaml
-deprecated: replaced by sonarbridge2, see https://docs.corp.example/sonarbridge2
+deprecated: replaced by bridge2, see https://docs.corp.example/bridge2
 ```
 
-La valeur est enregistrée dans le `release.json` de cette version. Les versions déjà publiées gardent la fiche qu'elles avaient.
+Cette information est enregistrée dans le `release.json` de la version concernée. Les versions déjà publiées conservent la fiche produit qui leur était associée lors de leur publication.

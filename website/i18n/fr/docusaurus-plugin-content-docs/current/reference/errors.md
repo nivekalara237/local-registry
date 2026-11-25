@@ -12,7 +12,7 @@ Routes de dépôt uniquement (`PUT …/files/{name}`, `POST …/publish`).
 
 | Statut | Message | Cause | Correction |
 | --- | --- | --- | --- |
-| `403` | `upload is disabled: no token configured` | Le serveur tourne sans `LOCAL_REGISTRY_UPLOAD_TOKEN` ni `upload-token`. | Configurez un jeton sur le serveur et redémarrez-le. Voir [Sécurité](../operations/security.md). |
+| `403` | `upload is disabled: no token configured` | Le serveur tourne sans `LOCAL_REGISTRY_UPLOAD_TOKEN` ni `upload-token`. | Configurez un jeton sur le serveur et redémarrez-le. Consultez [Sécurité](../operations/security.md). |
 | `401` | `invalid or missing bearer token` | Pas d'en-tête `Authorization`, autre schéma que `Bearer`, ou mauvais jeton. | Envoyez `Authorization: Bearer <token>` avec le jeton du serveur. Comparez les `token_id` avec `local-registry config`. |
 
 ## Noms
@@ -36,7 +36,7 @@ Routes de dépôt uniquement (`PUT …/files/{name}`, `POST …/publish`).
 
 ## Quotas et disque
 
-Levées pendant le dépôt. Voir [Quotas et staging](../operations/quotas-and-staging.md).
+Levées pendant le dépôt. Consultez [Quotas et staging](../operations/quotas-and-staging.md).
 
 | Statut | Message | Cause | Correction |
 | --- | --- | --- | --- |
@@ -59,19 +59,19 @@ Levées au dépôt du fichier.
 
 ### artifacts.json
 
-Levées au dépôt d'`artifacts.json`, puis de nouveau à la publication. Voir [Règles de dépôt](./upload-rules.md).
+Levées au dépôt d'`artifacts.json`, puis de nouveau à la publication. Consultez [Règles de dépôt](./upload-rules.md).
 
 | Statut | Message | Cause | Correction |
 | --- | --- | --- | --- |
 | `422` | `artifacts.json is larger than 32 MiB` | Trop volumineux. | — |
-| `422` | `artifacts.json is not a JSON array of objects` | Ce n'est pas le format de goreleaser. | Envoyez `dist/artifacts.json` tel que goreleaser l'a écrit. |
+| `422` | `artifacts.json is not a JSON array of objects` | Ce n'est pas le format de goreleaser. | Envoyez `dist/artifacts.json` tel que GoReleaser l'a écrit. |
 | `422` | `artifacts.json: entry <i> is null` | Un `null` dans le tableau. | Retirez-le. |
 | `422` | `artifacts.json: name, path and type must be strings: <reason>` | Un champ du mauvais type. | Corrigez l'entrée. |
 | `422` | `artifacts.json: a <type> entry has no name` | Une entrée publiée sans `name`. | Corrigez l'entrée. |
 | `422` | `artifacts.json lists <name> twice` | Deux fichiers publiés de même nom. | Renommez-les dans `.goreleaser.yaml`. |
 | `422` | `artifacts.json lists "<name>", a name that cannot be uploaded` | Un nom invalide ou réservé. | Renommez le fichier. |
 | `422` | `artifacts.json references <name>, which is not uploaded: upload every file first, artifacts.json last` | `artifacts.json` envoyé avant un fichier qu'il liste, ou ce fichier manque. | Déposez le fichier, puis `artifacts.json` à nouveau. |
-| `422` | `<name>: sha256 is <actual> but artifacts.json says <expected>` | Le fichier en staging n'est pas celui que goreleaser a construit. | Déposez le bon fichier. |
+| `422` | `<name>: sha256 is <actual> but artifacts.json says <expected>` | Le fichier en staging n'est pas celui que GoReleaser a construit. | Déposez le bon fichier. |
 
 ## Publication
 
@@ -81,12 +81,12 @@ Levées par `POST …/publish`, dans cet ordre. Rien n'est publié ; le staging 
 | --- | --- | --- | --- |
 | `422` | `several checksums files: <a> and <b>` | Deux fichiers finissant par `checksums.txt`. | N'en gardez qu'un. |
 | `422` | `registry.yaml not uploaded: every version needs its product card` | Pas de fiche produit. | Déposez `registry.yaml`, puis publiez à nouveau. |
-| `422` | `<checksums>: line <n> is not "<sha256>  <name>"` | Une ligne mal formée dans le fichier de checksums. | Envoyez le fichier écrit par goreleaser ou `sha256sum`. |
+| `422` | `<checksums>: line <n> is not "<sha256>  <name>"` | Une ligne mal formée dans le fichier de checksums. | Envoyez le fichier écrit par GoReleaser ou `sha256sum`. |
 | `422` | `<name> is not listed in <checksums>` | Un fichier en staging que le fichier de checksums ne couvre pas. | Ajoutez-le aux checksums, ou ne le déposez pas ; ou n'envoyez aucun fichier de checksums et laissez la publication en écrire un. |
 | `422` | `<name>: sha256 is <actual> but <checksums> says <expected>` | Le fichier en staging diffère des checksums. | Déposez le bon fichier. |
-| `422` | `metadata.json is not valid JSON` | `metadata.json` corrompu. | Envoyez celui de goreleaser, ou aucun. |
-| `422` | `metadata.json has neither tag nor version` | Ce n'est pas le `metadata.json` de goreleaser. | Envoyez celui de goreleaser, ou aucun. |
-| `422` | `metadata.json describes <tag> (version <v>), not <version>` | `metadata.json` d'un autre build. | Publiez sous la version que goreleaser a construite, ou envoyez le bon fichier. |
+| `422` | `metadata.json is not valid JSON` | `metadata.json` corrompu. | Envoyez celui de GoReleaser, ou aucun. |
+| `422` | `metadata.json has neither tag nor version` | Ce n'est pas le `metadata.json` de goreleaser. | Envoyez celui de GoReleaser, ou aucun. |
+| `422` | `metadata.json describes <tag> (version <v>), not <version>` | `metadata.json` d'un autre build. | Publiez sous la version que GoReleaser a construite, ou envoyez le bon fichier. |
 | `422` | `<name> is uploaded but artifacts.json does not list it` | Avec `artifacts.json`, un fichier en staging qu'il ne publie pas. | Listez le fichier (`release.extra_files`) ou ne le déposez pas. |
 | `422` | `no artifact to publish: upload at least one file besides registry.yaml` | Seuls la fiche, les notes, les métadonnées, les checksums ou des pièces jointes sont en staging. | Déposez les fichiers de la version. |
 | `500` | `internal error` | Erreur de disque ou de droits. Quand le journal du serveur indique `version published but latest not updated` ou `version published but index.json not updated`, la version **est** publiée. | Lisez le journal du serveur ; voir [Règles de dépôt](./upload-rules.md). |

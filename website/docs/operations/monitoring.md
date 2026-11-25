@@ -3,7 +3,7 @@ title: Monitoring
 description: Health check, startup output, request logs, exit codes and timeouts of the server.
 ---
 
-local-registry exposes a health endpoint, writes one log line per request, and uses exit codes your supervisor can act on. This page lists them, with what to alert on. The server has no metrics endpoint: derive metrics from the request logs and the [audit log](audit-log.md).
+Local Registry exposes a health endpoint, writes one log line per request, and uses exit codes your supervisor can act on. This page lists them, with what to alert on. The server has no metrics endpoint: derive metrics from the request logs and the [audit log](audit-log.md).
 
 ## Health check
 

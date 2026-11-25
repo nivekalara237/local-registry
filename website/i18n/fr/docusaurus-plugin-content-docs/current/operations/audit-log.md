@@ -19,7 +19,7 @@ Le journal d'audit enregistre chaque événement sensible des routes d'upload : 
 
 - **Un objet JSON par ligne**, en ajout.
 - **Écrit et synchronisé sur le disque avant que le client reçoive sa réponse.** Une version que le client a vue publiée figure dans le journal.
-- **Le token n'apparaît jamais**, seulement son `token_id` : les 12 premiers chiffres hexadécimaux de son sha256. Voir [Sécurité](security.md).
+- **Le token n'apparaît jamais**, seulement son `token_id` : les 12 premiers chiffres hexadécimaux de son sha256. Consultez [Sécurité](security.md).
 - **Une écriture ratée ne fait pas échouer la requête.** Le serveur écrit à la place `ERROR audit log write failed` sur la sortie d'erreur. Placez une alerte sur cette ligne.
 
 > [!NOTE]
@@ -101,4 +101,4 @@ Conseils de conservation :
 
 - Conservez au moins aussi longtemps que votre politique de conservation des releases, pour relier chaque version publiée à son upload.
 - Envoyez les lignes vers votre plateforme de logs (Loki, Elasticsearch, Splunk…) et alertez sur les rafales de `auth_failed` et sur `audit log write failed`.
-- Sauvegardez le fichier avec l'asset path. Voir [Stockage et sauvegarde](storage-and-backup.md).
+- Sauvegardez le fichier avec l'asset path. Consultez [Stockage et sauvegarde](storage-and-backup.md).

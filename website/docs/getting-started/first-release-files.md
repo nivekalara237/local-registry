@@ -1,20 +1,20 @@
 ---
-title: Publish files without goreleaser
+title: Publish files without GoReleaser
 description: Tutorial — publish database migrations, or any set of files, as a versioned product with release notes.
-sidebar_label: First release without goreleaser
+sidebar_label: First release without GoReleaser
 ---
 
 Not every deliverable is a Go binary. This tutorial publishes Liquibase database migrations as product `billing-db-migrations`, version `v1.0.0`. The same steps work for SQL scripts, Helm charts, configuration bundles, PDF documents or any other files.
 
-All you need is the files and a product card. goreleaser is not involved.
+All you need is the files and a product card. GoReleaser is not involved.
 
 ## What you need
 
-- A registry you can reach, and its upload token. Locally, the [Quick start](./quick-start.md) gives you one.
-- bash, curl 7.76+, jq, and `sha256sum` or `shasum`.
-- `scripts/upload.sh` from the local-registry repository.
+- The registry address and its upload token. If you do not run the registry yourself, ask the person or team responsible for it. To practise on your machine, the [Quick start](./quick-start.md) runs a trial registry.
+- [`localrectl`](../reference/localrectl.md), the command-line client of the registry.
+- curl and jq, to check the result.
 
-Our starting point is a migrations directory:
+The starting point is a migrations directory:
 
 ```
 migrations/
@@ -35,7 +35,7 @@ tar czf out/billing-db-migrations_1.0.0.tar.gz -C migrations changelog-master.xm
 ```
 
 > [!IMPORTANT]
-> `upload.sh` sends every file of the directory you give it, and refuses a directory that contains subdirectories. Keep `out/` for what you publish, and nothing else.
+> `localrectl` sends every file of the directory you give it, and fails if that directory contains a subdirectory. Keep `out/` for the files to publish, and nothing else.
 
 ## 2. Write the release notes
 
@@ -67,29 +67,30 @@ owners:
     email: billing@corp.example
 keywords: [liquibase, database, billing]
 install: |
-  curl -fsSL https://registry.example.com/billing-db-migrations/artifacts/v1.0.0/files/billing-db-migrations_1.0.0.tar.gz | tar xz
+  curl -fsSL https://registry.corp.example/billing-db-migrations/artifacts/v1.0.0/files/billing-db-migrations_1.0.0.tar.gz | tar xz
   liquibase update --changelog-file=changelog-master.xml
 ```
 
-`install` is free Markdown that portals and people read to know how to use the product.
+`install` is free Markdown that readers consult to know how to use or install the product.
 
 ## 4. Publish
 
 ```sh
-export LOCAL_REGISTRY_URL=https://registry.example.com
+export LOCAL_REGISTRY_URL=https://registry.corp.example
 export LOCAL_REGISTRY_UPLOAD_TOKEN=…   # from your secret store
 
-scripts/upload.sh --latest --version v1.0.0 --product-file migrations/registry.yaml billing-db-migrations out
+localrectl publish billing-db-migrations --root out --version v1.0.0 --no-semver-standard \
+  --product-file migrations/registry.yaml --latest
 ```
 
-Without goreleaser there is no `metadata.json` to read the version from, so you pass it with `--version`. The script uploads each file of `out/` with its sha256, then the product card, then publishes.
+Without GoReleaser there is no `metadata.json` to read the version from, so you pass it with `--version`. `--no-semver-standard` allows the `v` prefix. `localrectl` uploads each file of `out/` and the product card, then publishes the version.
 
 ## 5. What the server did for you
 
 Look at the published version:
 
 ```sh
-curl -s https://registry.example.com/billing-db-migrations/releases/v1.0.0 | jq '{changes, checksums: .checksums.name, artifacts: [.artifacts[] | {name, kind, format, os}]}'
+curl -s https://registry.corp.example/billing-db-migrations/releases/v1.0.0 | jq '{changes, checksums: .checksums.name, artifacts: [.artifacts[] | {name, kind, format, os}]}'
 ```
 
 ```json
@@ -105,7 +106,7 @@ curl -s https://registry.example.com/billing-db-migrations/releases/v1.0.0 | jq 
 }
 ```
 
-Three things happened without goreleaser:
+Three things happened without GoReleaser:
 
 | What | How |
 | --- | --- |

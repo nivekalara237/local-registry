@@ -7,11 +7,11 @@ Tout ce qui est sur le registre appartient à un **produit**, et chaque produit 
 
 ## Produit
 
-Un produit, c'est ce qu'une équipe livre et versionne : un outil en ligne de commande (`sonarbridge`), un agent (`billing-agent`), des migrations de base (`billing-db-migrations`), un paquet de règles (`security-policies`).
+Un produit, c'est ce que vous livrez et versionnez : un outil en ligne de commande (`bridge`), un agent (`billing-agent`), des migrations de base (`billing-db-migrations`), un paquet de règles (`security-policies`).
 
 - Vous ne déclarez pas un produit à l'avance. Il existe dès que sa première version est publiée.
-- Son nom est le premier segment de chaque URL : `/sonarbridge/…`.
-- Il est décrit par une **fiche produit**, le `registry.yaml` envoyé avec chaque version. Voir [Le standard local-registry/v1](./standard-v1.md).
+- Son nom est le premier segment de chaque URL : `/bridge/…`.
+- Il est décrit par une **fiche produit**, le `registry.yaml` envoyé avec chaque version. Consultez [Le standard local-registry/v1](./standard-v1.md).
 
 ## Version
 
@@ -19,11 +19,11 @@ Une version est une livraison publiée d'un produit, en général nommée d'apr�
 
 ```mermaid
 flowchart LR
-    P["produit<br/>sonarbridge"] --> V1["v1.4.1"]
+    P["produit<br/>bridge"] --> V1["v1.4.1"]
     P --> V2["v1.4.2<br/>(latest)"]
     P --> V3["v1.5.0-rc.1<br/>(pré-version)"]
-    V2 --> F1["sonarbridge_1.4.2_linux_amd64.tar.gz"]
-    V2 --> F2["sonarbridge_1.4.2_checksums.txt"]
+    V2 --> F1["bridge_1.4.2_linux_amd64.tar.gz"]
+    V2 --> F2["bridge_1.4.2_checksums.txt"]
     V2 --> F3["release.json"]
 ```
 
@@ -38,7 +38,7 @@ Une version dont le nom est une pré-version semver (`v1.5.0-rc.1`, `2.0.0-beta`
 
 ### Dépréciation
 
-La fiche produit peut marquer la version qu'elle accompagne comme dépréciée, avec `deprecated: true` ou un message comme `"remplacé par sonarbridge2"`. Le marqueur vaut pour une version : il apparaît dans son `release.json` et dans son entrée de l'index du produit.
+La fiche produit peut marquer la version qu'elle accompagne comme dépréciée, avec `deprecated: true` ou un message comme `"remplacé par bridge2"`. Le marqueur vaut pour une version : il apparaît dans son `release.json` et dans son entrée de l'index du produit.
 
 ## Noms
 
@@ -60,7 +60,7 @@ Un nom hors de ces règles répond `404` sur les routes de lecture et `400` sur 
 Chaque route se construit avec ces noms :
 
 ```
-https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.2_linux_amd64.tar.gz
+https://registry.corp.example/bridge/artifacts/v1.4.2/files/bridge_1.4.2_linux_amd64.tar.gz
                              └─produit──┘          └version┘     └──────────nom du fichier──────────┘
 ```
 
@@ -68,10 +68,10 @@ https://registry.example.com/sonarbridge/artifacts/v1.4.2/files/sonarbridge_1.4.
 | --- | --- |
 | `/products` | Tous les produits |
 | `/products/search?keyword=db` | Les produits qui répondent à des critères, page par page |
-| `/sonarbridge/index` | La fiche produit et ses versions |
-| `/sonarbridge/releases/v1.4.2` | La description d'une version |
-| `/sonarbridge/releases/latest` | La description de la dernière version |
-| `/sonarbridge/artifacts/v1.4.2/files/<nom>` | Un fichier |
+| `/bridge/index` | La fiche produit et ses versions |
+| `/bridge/releases/v1.4.2` | La description d'une version |
+| `/bridge/releases/latest` | La description de la dernière version |
+| `/bridge/artifacts/v1.4.2/files/<nom>` | Un fichier |
 
 La liste complète est dans la [référence de l'API HTTP](../reference/api/index.md).
 
