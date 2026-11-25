@@ -42,18 +42,17 @@ jobs:
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          path: build/
+          path: website/build/
           name: build-data
           retention-days: 1
+          if-no-files-found: error
 
   deploy-aws:
     name: Deploy website to S3
     needs: build
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/master'
     runs-on: ubuntu-22.04
     environment: aws
-    defaults:
-      run:
-        working-directory: website
 
     steps:
       - name: Download Build Artifacts
@@ -70,6 +69,11 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       - name: Deploy to S3
-        run: aws s3 sync build-data/ s3://${{ env.AWS_S3_BUCKET }} --delete --cache-control "public, max-age=60, immutable"
+        run: |
+          aws s3 sync build/ "s3://$AWS_S3_BUCKET" --exclude "*" --include "assets/*" --include "fr/assets/*" \
+            --cache-control "public, max-age=31536000, immutable"
+          aws s3 sync build/ "s3://$AWS_S3_BUCKET" --delete --exclude "assets/*" --exclude "fr/assets/*" \
+            --cache-control "public, max-age=60"
+          aws s3 sync build/ "s3://$AWS_S3_BUCKET" --delete --exclude "*" --include "assets/*" --include "fr/assets/*"
         env:
           AWS_S3_BUCKET: "local-registry.nivekaa.com"
